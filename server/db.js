@@ -9,8 +9,16 @@ const fs = require('fs-extra');
 const DB_FILE = process.env.DB_FILE || path.join(__dirname, '..', 'data', 'state.db');
 fs.ensureDirSync(path.dirname(DB_FILE));
 
-const db = new Database(DB_FILE);
-db.pragma('journal_mode = WAL');
+let db;
+try {
+  db = new Database(DB_FILE);
+  db.pragma('journal_mode = WAL');
+} catch (err) {
+  console.error(`❌ נכשל בפתיחת מסד הנתונים ב-${DB_FILE}: ${err.message}`);
+  console.error('   סיבה אפשרית: הנתיב לא ניתן לכתיבה (נתיב מוחלט כמו /data דורש Volume מחובר בראילוואי).');
+  console.error('   נסו נתיב יחסי כמו ./data/state.db ב-DB_FILE, או צרו Volume בהגדרות השירות.');
+  throw err;
+}
 
 db.exec(`
 CREATE TABLE IF NOT EXISTS positions (

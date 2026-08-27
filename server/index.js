@@ -35,6 +35,10 @@ app.post('/admin/api/logout', adminAuth.handleLogout);
 app.use('/admin/api', adminAuth.requireAdminAuth, adminRoutes);
 app.use('/admin', express.static(path.join(__dirname, 'public', 'admin')));
 
+app.get('/', (req, res) => {
+  res.type('text/plain; charset=utf-8').send('שרת ימות-הש"ס פעיל. ממשק ניהול: /admin');
+});
+
 app.use((req, res, next) => {
   res.type('text/plain; charset=utf-8');
   next();
@@ -138,8 +142,8 @@ function playfileFolderFor(masechet, daf, amud) {
 }
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`שרת ימות-הש"ס מאזין על פורט ${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`שרת ימות-הש"ס מאזין על 0.0.0.0:${PORT}`);
 });
 
 module.exports = { playfileFolderFor };

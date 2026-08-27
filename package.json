@@ -4,9 +4,13 @@
   "description": "מערכת IVR להקראת תנ\"ך ותלמוד עבור ימות המשיח - כולל ניווט, מפרשים, וזיכרון מיקום",
   "main": "server/index.js",
   "type": "commonjs",
+  "engines": {
+    "node": "20.x"
+  },
   "scripts": {
     "start": "node server/index.js",
     "dev": "nodemon server/index.js",
+    "postinstall": "npm rebuild better-sqlite3 --build-from-source",
     "scrape": "node pipeline/scrapeWikitext.js",
     "build-audio": "node pipeline/buildAudio.js"
   },
