@@ -40,21 +40,22 @@ async function addNikud(text, genre = 'rabbinic') {
     { headers: { 'Content-Type': 'application/json' }, timeout: 30000 }
   );
 
-  // תגובת ה-API היא מערך של "יחידות" (מילים/סימני פיסוק), כשלכל אחת
-  // יש בד"כ שדה options עם האפשרות המנוקדת המובילה. מרכיבים בחזרה למשפט.
-  const units = resp.data;
+  // תגובת ה-API האמיתית (נבדק בפועל): { data: [ { str, nakdan: { options, sep } }, ... ] }
+  // כל איבר הוא או מילה (nakdan.options מכיל את האפשרויות המנוקדות,
+  // האפשרות הראשונה - levelChoice 1 - היא הטובה ביותר) או מפריד
+  // (sep=true: רווח/פיסוק, ללא ניקוד - פשוט שומרים את str כמו שהוא).
+  const units = resp.data && resp.data.data;
   if (!Array.isArray(units)) {
     throw new Error('תגובה לא צפויה משירות הניקוד - יש לבדוק את מבנה ה-JSON שחוזר');
   }
 
   return units
     .map((unit) => {
-      if (unit.options && unit.options.length > 0) {
-        // כל option הוא בד"כ [ניקוד, ניתוח דקדוקי] - לוקחים את הראשון (הכי סביר)
-        const best = unit.options[0];
-        return Array.isArray(best) ? best[0] : (best.w || best.word || unit.word || '');
+      const nakdan = unit.nakdan || {};
+      if (nakdan.sep || !nakdan.options || nakdan.options.length === 0) {
+        return unit.str || nakdan.word || '';
       }
-      return unit.word || '';
+      return (nakdan.options[0].w || unit.str || '').replace(/\|/g, '');
     })
     .join('')
     .trim();

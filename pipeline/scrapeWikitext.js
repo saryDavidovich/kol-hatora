@@ -50,8 +50,14 @@ async function fetchRawWikitext(pageTitle) {
 
 /**
  * מפצל את הוויקיטקסט המלא של העמוד לפי כותרות ברמה 2/3 (== כותרת ==),
- * ומחזיר מפה { שם_כותרת_מנוקה: תוכן }. תוכן שלפני הכותרת הראשונה
- * (אם יש - למשל שורות ניווט) מתעלמים ממנו.
+ * ומחזיר מפה { שם_כותרת_מנוקה: תוכן }.
+ *
+ * *** נמצא בבדיקה בפועל *** בחלק מהדפים (בעיקר דפים שממשיכים באמצע
+ * פרק, כמו "ברכות ג א") אין כלל כותרת "== גמרא ==" מפורשת - הטקסט
+ * של הגמרא פשוט מתחיל ישר בתחילת הדף, לפני הכותרת הראשונה שכן קיימת
+ * (בד"כ "== רש"י ==" ). לכן: כל תוכן שמופיע *לפני* הכותרת הראשונה
+ * משויך אוטומטית ל"גמרא" (אלא אם כן כבר יש כותרת "גמרא" מפורשת -
+ * במקרה כזה לא דורסים אותה, אלא רק ממזגים את הפתיח לפניה).
  */
 function splitIntoSections(wikitext) {
   const headerRegex = /^(={2,3})\s*([^=\n]+?)\s*\1\s*$/gm;
@@ -59,8 +65,10 @@ function splitIntoSections(wikitext) {
   let lastTitle = null;
   let lastIndex = 0;
   let match;
+  let firstHeaderIndex = null;
 
   while ((match = headerRegex.exec(wikitext)) !== null) {
+    if (firstHeaderIndex === null) firstHeaderIndex = match.index;
     if (lastTitle !== null) {
       sections[lastTitle] = wikitext.slice(lastIndex, match.index).trim();
     }
@@ -70,6 +78,18 @@ function splitIntoSections(wikitext) {
   if (lastTitle !== null) {
     sections[lastTitle] = wikitext.slice(lastIndex).trim();
   }
+
+  // תוכן לפני הכותרת הראשונה (אם יש) -> משויך לגמרא
+  const preamble = (firstHeaderIndex === null ? wikitext : wikitext.slice(0, firstHeaderIndex)).trim();
+  if (preamble) {
+    const gemaraKey = Object.keys(sections).find((k) => normalizeSectionKey(k) === 'גמרא');
+    if (gemaraKey) {
+      sections[gemaraKey] = `${preamble}\n\n${sections[gemaraKey]}`;
+    } else {
+      sections['גמרא'] = preamble;
+    }
+  }
+
   return sections;
 }
 
@@ -82,10 +102,25 @@ function splitBoldSegments(wikitext) {
   let clean = wikitext
     .replace(/<ref[^>]*>.*?<\/ref>/gs, '')
     .replace(/<ref[^>]*\/>/g, '')
-    .replace(/\{\{[^{}]*\}\}/g, '')
+    // תבניות שמות (תנא/אמורא) - שומרים את פרמטר התצוגה (האחרון) ולא מוחקים
+    // את הטקסט לגמרי, כי זה בד"כ שם החכם המוזכר במשפט ("ר' אליעזר" וכו')
+    .replace(/\{\{(?:תנא|אמורא)\|([^{}]*)\}\}/g, (_, args) => {
+      const parts = args.split('|');
+      return parts[parts.length - 1].trim();
+    })
+    // {{קטן|...}} - עטיפת טקסט קטן, לא רלוונטי ל-TTS: פשוט חושפים את התוכן הפנימי
+    .replace(/\{\{קטן\|([\s\S]*?)\}\}/g, '$1')
     .replace(/\[\[[^\]|]*\|([^\]]*)\]\]/g, '$1')
     .replace(/\[\[([^\]]*)\]\]/g, '$1')
     .replace(/<[^>]+>/g, '');
+
+  // שאר התבניות (הפניה לפסוק, שוליים, וכו') - מוחקים לגמרי. מטפל גם
+  // בתבניות מקוננות ע"י הסרה איטרטיבית מבפנים-החוצה, עד שלא נשאר כלום.
+  let prevLength;
+  do {
+    prevLength = clean.length;
+    clean = clean.replace(/\{\{[^{}]*\}\}/g, '');
+  } while (clean.length !== prevLength);
 
   const segments = [];
   const regex = /'''(.+?)'''/gs;
