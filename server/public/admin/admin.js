@@ -198,7 +198,8 @@ function column(track, label, text, error) {
       </div>
       <div class="column-toolbar">
         <button data-action="refetch" data-track="${track}">↻ משוך מחדש</button>
-        <button data-action="nikud" data-track="${track}">🔤 הוסף ניקוד</button>
+        <button data-action="nikud" data-track="${track}">🔤 ניקוד (חינם)</button>
+        <button data-action="punctuate" data-track="${track}" title="משתמש ב-Claude API - עולה כסף לפי כמות הטקסט">✒️ פיסוק (בתשלום)</button>
       </div>
       <textarea data-track="${track}" placeholder="אין תוכן עדיין...">${text || ''}</textarea>
       ${error ? `<div class="column-error">שגיאה בשליפה: ${error}</div>` : ''}
@@ -224,6 +225,9 @@ function wireDafEditorEvents(masechet, daf, amud) {
           ta.value = r.text;
         } else if (action === 'nikud') {
           const r = await api('/nikud', { method: 'POST', body: JSON.stringify({ text: ta.value }) });
+          ta.value = r.text;
+        } else if (action === 'punctuate') {
+          const r = await api('/punctuate', { method: 'POST', body: JSON.stringify({ text: ta.value }) });
           ta.value = r.text;
         }
       } catch (e) {

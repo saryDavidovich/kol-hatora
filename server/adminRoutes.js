@@ -24,6 +24,7 @@ const contentIndex = require('./contentIndex');
 const jobs = require('./jobs');
 const { scrapeAmudAll, scrapeTrack, splitBoldSegments } = require('../pipeline/scrapeWikitext');
 const { addNikud } = require('../pipeline/nikud');
+const { addPunctuation } = require('../pipeline/punctuation');
 const { buildTrackAudio } = require('../pipeline/buildAudio');
 const { uploadAmud } = require('../pipeline/uploadToYemot');
 const MASECHTOT_DAPIM = require('../pipeline/masechtotDapim');
@@ -101,7 +102,7 @@ router.get('/daf/:masechet/:daf/:amud', async (req, res) => {
   res.json({ source: 'wikitext', ...tracks });
 });
 
-// --- 4. ניקוד (לא שומר) ---
+// --- 4. ניקוד בלבד (דיקטה, חינמי) ---
 router.post('/nikud', async (req, res) => {
   const { text, genre } = req.body;
   if (!text) return res.status(400).json({ error: 'חסר טקסט' });
@@ -110,6 +111,19 @@ router.post('/nikud', async (req, res) => {
     res.json({ text: nikudText });
   } catch (err) {
     res.status(502).json({ error: `שירות הניקוד נכשל: ${err.message}` });
+  }
+});
+
+// --- 4ב. פיסוק בלבד (Claude API - עולה כסף! נפרד מהניקוד בכוונה,
+//     כדי שתפעילו אותו רק כשאתם באמת רוצים, ולא בכל לחיצת ניקוד) ---
+router.post('/punctuate', async (req, res) => {
+  const { text } = req.body;
+  if (!text) return res.status(400).json({ error: 'חסר טקסט' });
+  try {
+    const punctuated = await addPunctuation(text);
+    res.json({ text: punctuated });
+  } catch (err) {
+    res.status(502).json({ error: err.message });
   }
 });
 
