@@ -35,6 +35,7 @@ function topbar(activeCrumbs = '') {
       <div class="brand">📜 ניהול תוכן · ימות הש"ס</div>
       <nav>
         <a href="#/">דשבורד</a>
+        <a href="#/voices">⚙️ הגדרות קול</a>
         <a href="#" id="logoutLink">התנתקות</a>
       </nav>
     </div>`;
@@ -53,6 +54,7 @@ async function render() {
   }
 
   if (hash === '#/' || hash === '') return renderDashboard();
+  if (hash === '#/voices') return renderVoiceSettings();
 
   const masechetMatch = hash.match(/^#\/masechet\/([^/]+)$/);
   if (masechetMatch) return renderMasechet(decodeURIComponent(masechetMatch[1]));
@@ -302,4 +304,111 @@ async function pollJob(jobId, statusEl, onDone) {
     }
     await new Promise((r) => setTimeout(r, 1200));
   }
+}
+
+// ==================== הגדרות קול ====================
+async function renderVoiceSettings() {
+  app.innerHTML = `${topbar()}<div class="content"><div class="loading">טוען רשימת קולות מגוגל...</div></div>`;
+  attachTopbarHandlers();
+
+  let voices, current;
+  try {
+    [{ voices }, current] = await Promise.all([api('/voices'), api('/settings')]);
+  } catch (e) {
+    document.querySelector('.content').innerHTML = `
+      <h1 class="page-title">הגדרות קול</h1>
+      <p class="column-error">שגיאה בטעינת רשימת הקולות: ${e.message}</p>
+      <p>ודאו ש-GOOGLE_TTS_API_KEY מוגדר נכון במשתני הסביבה, ושהפעלתם את Text-to-Speech API בפרויקט שלכם ב-Google Cloud.</p>`;
+    return;
+  }
+
+  // ממיינים: WaveNet קודם (הזול והמומלץ), אחר כך השאר לפי שם
+  const rank = (name) => (name.includes('Wavenet') ? 0 : name.includes('Standard') ? 1 : 2);
+  voices.sort((a, b) => rank(a.name) - rank(b.name) || a.name.localeCompare(b.name));
+
+  const options = voices.map((v) => {
+    const tier = v.name.includes('Wavenet') ? 'WaveNet ($4/מיליון)'
+      : v.name.includes('Standard') ? 'Standard ($4/מיליון)'
+      : v.name.includes('Neural2') ? 'Neural2 ($16/מיליון)'
+      : v.name.includes('Chirp') ? 'Chirp3 HD ($30/מיליון)' : '';
+    return `<option value="${v.name}">${v.name} · ${v.ssmlGender === 'MALE' ? 'זכר' : 'נקבה'} · ${tier}</option>`;
+  }).join('');
+
+  document.querySelector('.content').innerHTML = `
+    <h1 class="page-title">הגדרות קול</h1>
+    <p>בחרו קול לטקסט רגיל (גמרא/רש"י/תוספות) וקול נפרד לטקסט מודגש
+       (כותרות/ראשי דיבור). לחצו "▶ נגן דוגמה" כדי לשמוע לפני שבוחרים -
+       בדיוק כמו שראיתם בכלי ה-Gemini, אבל מול הקולות האמיתיים של
+       Google Cloud TTS שבהם המערכת בונה בפועל.</p>
+
+    <div class="page-frame" style="max-width:600px">
+      <div class="column" style="margin-bottom:1.5rem">
+        <div class="column-header"><span>קול לטקסט רגיל</span></div>
+        <select id="voiceNormalSelect" style="padding:0.6em;font-size:1rem">${options}</select>
+        <div class="column-toolbar">
+          <button id="previewNormal">▶ נגן דוגמה</button>
+        </div>
+        <audio id="audioNormal" class="audio-preview" controls style="display:none"></audio>
+      </div>
+
+      <div class="column">
+        <div class="column-header"><span>קול לטקסט מודגש</span></div>
+        <select id="voiceBoldSelect" style="padding:0.6em;font-size:1rem">${options}</select>
+        <div class="column-toolbar">
+          <button id="previewBold">▶ נגן דוגמה</button>
+        </div>
+        <audio id="audioBold" class="audio-preview" controls style="display:none"></audio>
+      </div>
+    </div>
+
+    <div class="daf-actions">
+      <button class="primary" id="saveVoicesBtn">💾 שמור כברירת מחדל</button>
+    </div>
+    <div class="job-status" id="voicesStatus"></div>
+  `;
+
+  if (current.voiceNormal) document.getElementById('voiceNormalSelect').value = current.voiceNormal;
+  if (current.voiceBold) document.getElementById('voiceBoldSelect').value = current.voiceBold;
+
+  async function preview(selectId, audioId, btn) {
+    const voice = document.getElementById(selectId).value;
+    const audioEl = document.getElementById(audioId);
+    const original = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = '...מייצר';
+    try {
+      const resp = await fetch('/admin/api/voices/preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ voice }),
+      });
+      if (!resp.ok) throw new Error((await resp.json()).error || 'שגיאה');
+      const blob = await resp.blob();
+      audioEl.src = URL.createObjectURL(blob);
+      audioEl.style.display = 'block';
+      audioEl.play();
+    } catch (e) {
+      alert(e.message);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = original;
+    }
+  }
+
+  document.getElementById('previewNormal').addEventListener('click', (e) => preview('voiceNormalSelect', 'audioNormal', e.target));
+  document.getElementById('previewBold').addEventListener('click', (e) => preview('voiceBoldSelect', 'audioBold', e.target));
+
+  document.getElementById('saveVoicesBtn').addEventListener('click', async () => {
+    const statusEl = document.getElementById('voicesStatus');
+    const voiceNormal = document.getElementById('voiceNormalSelect').value;
+    const voiceBold = document.getElementById('voiceBoldSelect').value;
+    try {
+      await api('/settings', { method: 'POST', body: JSON.stringify({ voiceNormal, voiceBold }) });
+      statusEl.textContent = 'נשמר ✓ - כל בנייה חדשה תשתמש בקולות האלה';
+      statusEl.className = 'job-status done';
+    } catch (e) {
+      statusEl.textContent = `שגיאה: ${e.message}`;
+      statusEl.className = 'job-status error';
+    }
+  });
 }

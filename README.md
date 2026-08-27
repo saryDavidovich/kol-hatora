@@ -160,9 +160,15 @@ npm start
    איכות התוצאה בפועל בממשק הניהול, ולשקול לנסות גם `genre='premodern'`
    אם התוצאה לא מספקת.
 
-3. **ספק ה-TTS** - `ttsProvider.js` הוא ממשק גנרי; יש לחבר בפועל
-   לספק שתבחרו ולוודא תמיכה טובה בעברית/ארמית (זו הבעיה האיכותית
-   המשמעותית ביותר בפרויקט - ראה `PHONETIC_FIXES` להרחבה הדרגתית).
+3. **ספק ה-TTS: Google Cloud Text-to-Speech (WaveNet)** - צעדים:
+   1. צרו פרויקט ב-[console.cloud.google.com](https://console.cloud.google.com), הפעילו "Text-to-Speech API"
+   2. צרו API key: APIs & Services → Credentials → Create Credentials → API Key
+   3. הוסיפו אותו כ-`GOOGLE_TTS_API_KEY` ב-.env
+   4. **חשוב:** הריצו `node pipeline/listGoogleVoices.js` כדי לקבל רשימה
+      אמיתית של שמות הקולות העבריים הזמינים אצלכם (לא לנחש/להעתיק
+      משם קול שראיתם באינטרנט - הרשימה משתנה) - העתיקו שני שמות
+      (קול רגיל + קול לטקסט מודגש) ל-`TTS_VOICE_NORMAL`/`TTS_VOICE_BOLD`
+   5. עלות משוערת לכל הש"ס עם קולות WaveNet: כ-$60-120 (חד-פעמי)
 
 4. **פורמט האודיו** - הקוד מניח WAV mono 8kHz PCM (נפוץ ב-IVR טלפוני);
    כדאי לוודא מול "הגדרות מתקדמות - ימות המשיח" העדכניות שזה עדיין

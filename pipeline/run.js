@@ -15,12 +15,9 @@ const fs = require('fs-extra');
 const { scrapeAmudAll } = require('./scrapeWikitext');
 const { buildTrackAudio } = require('./buildAudio');
 const { uploadAmud } = require('./uploadToYemot');
+const settingsStore = require('../server/settings');
 
 const CONTENT_ROOT = process.env.CONTENT_ROOT || path.join(__dirname, '..', 'data', 'shas-content');
-
-// קולות TTS - להתאים לספק ולקולות שבחרתם (ראה pipeline/ttsProvider.js)
-const VOICE_NORMAL = process.env.TTS_VOICE_NORMAL || 'he-IL-male-1';
-const VOICE_BOLD = process.env.TTS_VOICE_BOLD || 'he-IL-male-2'; // קול שונה לכותרות/טקסט מודגש
 
 function buildExtIni(templatePath, apiPlayerUrl) {
   const template = fs.readFileSync(templatePath, 'utf-8');
@@ -29,6 +26,17 @@ function buildExtIni(templatePath, apiPlayerUrl) {
 
 async function processAmud(masechet, daf, amud) {
   console.log(`--- מעבד: ${masechet} דף ${daf} עמוד ${amud} ---`);
+
+  // קולות: אותה הגדרה שנבחרה בממשק הניהול (⚙️ הגדרות קול), כדי שהרצות
+  // batch יהיו עקביות עם מה שבחרתם ובדקתם ידנית שם. אם לא נבחר כלום שם
+  // עדיין - חוזר למשתני הסביבה TTS_VOICE_NORMAL/TTS_VOICE_BOLD כברירת מחדל.
+  const { voiceNormal, voiceBold } = await settingsStore.getVoices();
+  if (!voiceNormal) {
+    throw new Error(
+      'לא נבחר קול ברירת מחדל. היכנסו לממשק הניהול (/admin) -> ⚙️ הגדרות קול, ' +
+      'בחרו ושמרו קול, ואז הריצו שוב.'
+    );
+  }
 
   const dafPadded = String(daf).padStart(3, '0');
   const localDir = path.join(CONTENT_ROOT, 'shas', masechet, `daf-${dafPadded}`, amud);
@@ -48,8 +56,8 @@ async function processAmud(masechet, daf, amud) {
     // 2) בניית קובץ האודיו + מפת הזמנים לכל track
     await buildTrackAudio({
       segments: data.segments,
-      voiceNormal: VOICE_NORMAL,
-      voiceBold: VOICE_BOLD,
+      voiceNormal,
+      voiceBold,
       useBeeps: true,
       outDir: localDir,
       trackName,

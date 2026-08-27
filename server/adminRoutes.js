@@ -26,12 +26,15 @@ const { scrapeAmudAll, scrapeTrack, splitBoldSegments } = require('../pipeline/s
 const { addNikud } = require('../pipeline/nikud');
 const { addPunctuation } = require('../pipeline/punctuation');
 const { buildTrackAudio } = require('../pipeline/buildAudio');
+const { listHebrewVoices, synthesizeToFile } = require('../pipeline/ttsProvider');
+const settings = require('./settings');
 const { uploadAmud } = require('../pipeline/uploadToYemot');
 const MASECHTOT_DAPIM = require('../pipeline/masechtotDapim');
 
 const CONTENT_ROOT = process.env.CONTENT_ROOT || path.join(__dirname, '..', 'data', 'shas-content');
-const VOICE_NORMAL = process.env.TTS_VOICE_NORMAL || 'he-IL-male-1';
-const VOICE_BOLD = process.env.TTS_VOICE_BOLD || 'he-IL-male-2';
+// קולות ברירת המחדל נטענים דינמית מ-server/settings.js (ניתן לבחור
+// ולשמור מהממשק - ראה /voices ו-/settings למטה), עם נפילה חינה
+// למשתני הסביבה TTS_VOICE_NORMAL/TTS_VOICE_BOLD אם עדיין לא נבחר כלום.
 
 router.use(express.json({ limit: '2mb' }));
 
@@ -159,6 +162,10 @@ router.post('/daf/:masechet/:daf/:amud/build', async (req, res) => {
   const outDir = path.join(CONTENT_ROOT, 'shas', masechet, `daf-${dafPadded}`, amud);
 
   const jobId = jobs.runAsJob(async (progress) => {
+    const { voiceNormal, voiceBold } = await settings.getVoices();
+    if (!voiceNormal) {
+      throw new Error('לא נבחר קול ברירת מחדל - עברו ל"⚙️ הגדרות קול" ובחרו קול לפני הבנייה');
+    }
     const tracksToBuild = [
       ['gemara', gemara], ['rashi', rashi], ['tosafot', tosafot],
     ].filter(([, text]) => text && text.trim());
@@ -173,7 +180,7 @@ router.post('/daf/:masechet/:daf/:amud/build', async (req, res) => {
       const finalSegments = segments.length ? segments : [{ text, bold: false }];
 
       await buildTrackAudio({
-        segments: finalSegments, voiceNormal: VOICE_NORMAL, voiceBold: VOICE_BOLD, useBeeps: true,
+        segments: finalSegments, voiceNormal, voiceBold, useBeeps: true,
         outDir, trackName,
       });
       done++;
@@ -235,6 +242,59 @@ router.post('/daf/:masechet/:daf/:amud/upload', async (req, res) => {
   });
 
   res.json({ jobId });
+});
+
+// ==================== הגדרות קול (Google Cloud TTS) ====================
+
+// זיכרון מטמון קצר לרשימת הקולות - היא לא משתנה תוך כדי הרצה, ואין
+// טעם לפנות לגוגל בכל פעם שנכנסים למסך ההגדרות
+let voicesCache = null;
+let voicesCacheAt = 0;
+const VOICES_CACHE_TTL_MS = 10 * 60 * 1000;
+
+// --- רשימת הקולות העבריים האמיתיים הזמינים בחשבון שלכם ---
+router.get('/voices', async (req, res) => {
+  try {
+    const now = Date.now();
+    if (!voicesCache || now - voicesCacheAt > VOICES_CACHE_TTL_MS) {
+      voicesCache = await listHebrewVoices();
+      voicesCacheAt = now;
+    }
+    res.json({ voices: voicesCache });
+  } catch (err) {
+    res.status(502).json({ error: err.message });
+  }
+});
+
+// --- נגינת משפט לדוגמה בקול נבחר, כדי לשמוע לפני שבוחרים ---
+router.post('/voices/preview', async (req, res) => {
+  const { voice, text } = req.body;
+  if (!voice) return res.status(400).json({ error: 'חסר שם קול' });
+
+  const sampleText = text || 'מאימתי קורין את שמע בערבין, משעה שהכהנים נכנסים לאכול בתרומתן';
+  const tmpPath = path.join(require('os').tmpdir(), `preview_${Date.now()}.wav`);
+
+  try {
+    await synthesizeToFile(sampleText, voice, tmpPath);
+    const audioBuffer = await fs.readFile(tmpPath);
+    res.type('audio/wav').send(audioBuffer);
+  } catch (err) {
+    res.status(502).json({ error: err.message });
+  } finally {
+    fs.remove(tmpPath).catch(() => {});
+  }
+});
+
+// --- קריאה/שמירה של הקולות הנבחרים כברירת מחדל לבניית עמודים ---
+router.get('/settings', async (req, res) => {
+  const voices = await settings.getVoices();
+  res.json(voices);
+});
+
+router.post('/settings', async (req, res) => {
+  const { voiceNormal, voiceBold } = req.body;
+  const saved = await settings.updateSettings({ voiceNormal, voiceBold });
+  res.json(saved);
 });
 
 module.exports = router;
