@@ -22,7 +22,7 @@ const router = express.Router();
 const drafts = require('./drafts');
 const contentIndex = require('./contentIndex');
 const jobs = require('./jobs');
-const { scrapeTrack, splitBoldSegments } = require('../pipeline/scrapeWikitext');
+const { scrapeAmudAll, scrapeTrack, splitBoldSegments } = require('../pipeline/scrapeWikitext');
 const { addNikud } = require('../pipeline/nikud');
 const { buildTrackAudio } = require('../pipeline/buildAudio');
 const { uploadAmud } = require('../pipeline/uploadToYemot');
@@ -84,11 +84,16 @@ router.get('/daf/:masechet/:daf/:amud', async (req, res) => {
   }
 
   const tracks = {};
-  for (const track of ['gemara', 'rashi', 'tosafot']) {
-    try {
-      const { plainText } = await scrapeTrack(masechet, daf, amud, track);
-      tracks[track] = plainText;
-    } catch (err) {
+  try {
+    const { tracks: allTracks } = await scrapeAmudAll(masechet, daf, amud);
+    for (const track of ['gemara', 'rashi', 'tosafot']) {
+      const data = allTracks[track];
+      tracks[track] = data.plainText;
+      if (data.missing) tracks[`${track}_error`] = 'הכותרת לא נמצאה בעמוד הזה בוויקיטקסט';
+    }
+  } catch (err) {
+    // כשל בשליפת העמוד כולו (למשל שם לא נמצא) - מציגים את השגיאה בכל העמודות
+    for (const track of ['gemara', 'rashi', 'tosafot']) {
       tracks[track] = '';
       tracks[`${track}_error`] = err.message;
     }

@@ -12,15 +12,15 @@ require('dotenv').config();
 const path = require('path');
 const fs = require('fs-extra');
 
-const { scrapeAmud } = require('./scrapeWikitext');
+const { scrapeAmudAll } = require('./scrapeWikitext');
 const { buildTrackAudio } = require('./buildAudio');
 const { uploadAmud } = require('./uploadToYemot');
 
 const CONTENT_ROOT = process.env.CONTENT_ROOT || path.join(__dirname, '..', 'data', 'shas-content');
 
 // קולות TTS - להתאים לספק ולקולות שבחרתם (ראה pipeline/ttsProvider.js)
-const VOICE_NORMAL = 'he-IL-male-1';
-const VOICE_BOLD = 'he-IL-male-2'; // קול שונה לכותרות/טקסט מודגש
+const VOICE_NORMAL = process.env.TTS_VOICE_NORMAL || 'he-IL-male-1';
+const VOICE_BOLD = process.env.TTS_VOICE_BOLD || 'he-IL-male-2'; // קול שונה לכותרות/טקסט מודגש
 
 function buildExtIni(templatePath, apiPlayerUrl) {
   const template = fs.readFileSync(templatePath, 'utf-8');
@@ -34,31 +34,38 @@ async function processAmud(masechet, daf, amud) {
   const localDir = path.join(CONTENT_ROOT, 'shas', masechet, `daf-${dafPadded}`, amud);
   await fs.ensureDir(localDir);
 
-  // 1) שליפת הגמרא מוויקיטקסט (רש"י/תוספות דורשים לוגיקת שליפה נפרדת,
-  //    בהתאם למבנה בפועל של הדף באתר - ראה הערה ב-scrapeWikitext.js)
-  const { segments } = await scrapeAmud(masechet, daf, amud);
-  if (!segments.length) {
-    console.warn(`  אין תוכן עבור ${masechet} ${daf}${amud} - מדלג`);
+  // 1) שליפת העמוד השלם מוויקיטקסט (שליפה אחת מביאה גמרא+רש"י+תוספות יחד)
+  const { title, tracks } = await scrapeAmudAll(masechet, daf, amud);
+
+  const builtTracks = [];
+  for (const trackName of ['gemara', 'rashi', 'tosafot']) {
+    const data = tracks[trackName];
+    if (data.missing || !data.segments.length) {
+      console.warn(`  ${trackName}: לא נמצא תוכן בעמוד "${title}" - מדלג על track זה`);
+      continue;
+    }
+
+    // 2) בניית קובץ האודיו + מפת הזמנים לכל track
+    await buildTrackAudio({
+      segments: data.segments,
+      voiceNormal: VOICE_NORMAL,
+      voiceBold: VOICE_BOLD,
+      useBeeps: true,
+      outDir: localDir,
+      trackName,
+    });
+    builtTracks.push(trackName);
+  }
+
+  if (!builtTracks.length) {
+    console.warn(`  אין אף track עם תוכן עבור ${masechet} ${daf}${amud} - מדלג לגמרי`);
     return;
   }
 
-  // 2) בניית קובץ האודיו + מפת הזמנים לגמרא
-  const result = await buildTrackAudio({
-    segments,
-    voiceNormal: VOICE_NORMAL,
-    voiceBold: VOICE_BOLD,
-    useBeeps: true,
-    outDir: localDir,
-    trackName: 'gemara',
-  });
-
   // 3) כתיבת meta.json
   await fs.writeJson(path.join(localDir, 'meta.json'), {
-    masechet, daf, amud, durationMs: result.durationMs, generatedAt: new Date().toISOString(),
+    masechet, daf, amud, wikisourceTitle: title, tracks: builtTracks, generatedAt: new Date().toISOString(),
   }, { spaces: 2 });
-
-  // TODO: לחזור על שלבים 1-2 גם עבור rashi ו-tosafot כאשר תמצאו את דפוס
-  // השליפה הנכון עבורם בוויקיטקסט (בדרך כלל דפים/section נפרדים)
 
   // 4) יצירת ext.ini מהתבנית
   const templatePath = path.join(__dirname, '..', 'config', 'ext-playfile-daf-template.ini');

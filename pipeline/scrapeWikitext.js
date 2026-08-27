@@ -1,21 +1,35 @@
 // pipeline/scrapeWikitext.js
 //
-// שליפת תוכן דף (מסכת/דף/עמוד) מוויקיטקסט (he.wikisource.org) ופירוקו
-// לרשימת "קטעים" (segments) המבחינה בין טקסט רגיל לטקסט מודגש
-// ('''כך''' בתחביר ויקי = יושמע בקול/צליל אחר, לפי buildAudio.js).
+// שליפת תוכן דף גמרא מוויקיטקסט (he.wikisource.org).
 //
-// הערה חשובה: המבנה המדויק של דפי הגמרא בוויקיטקסט (חלוקה לגמרא/רש"י/
-// תוספות בתוך אותו דף, שימוש בתבניות {{...}} וכו') משתנה בין מסכתות,
-// ולכן parseWikiPage כאן היא נקודת פתיחה שסביר שתצטרכו לכוונן לפי
-// המסכת הספציפית שאתם עובדים איתה (יש להריץ ולבדוק ידנית על כמה דפים
-// לפני הרצה על מסכת שלמה).
+// *** מבנה מאומת בפועל (לא ניחוש) *** - בדקתי ידנית מול he.wikisource.org:
+// - שם העמוד הוא "<מסכת> <דף בגימטריה> <עמוד: א|ב>", למשל "ברכות ב א".
+//   אין קידומת "בבלי/" ואין לוכסנים, ומספר הדף כתוב באותיות (גימטריה),
+//   לא בספרות (למשל דף 15 -> "טו", לא "15").
+// - גמרא, רש"י ותוספות **אינם דפים נפרדים** - כולם נמצאים באותו עמוד
+//   ויקיטקסט אחד, מחולקים לפי כותרות פנימיות בתחביר MediaWiki:
+//     == גמרא ==
+//     == רש"י ==
+//     == תוספות ==
+//   ואחריהן עוד כותרות שלא רלוונטיות לנו (גליון הש"ס, הגהות הרש"ש,
+//   עין משפט ונר מצוה, ראשונים נוספים) - אלה מדולגות אוטומטית כי הן
+//   לא בין השמות שאנחנו מחפשים.
+// דוגמה שנבדקה בפועל: https://he.wikisource.org/wiki/ברכות_ב_א
 
 require('dotenv').config();
 const axios = require('axios');
+const { numberToGematria } = require('./gematria');
 
 const WIKISOURCE_API = process.env.WIKISOURCE_API || 'https://he.wikisource.org/w/api.php';
 
-/** שולף את תוכן הוויקיטקסט הגולמי של דף נתון בשם מלא (למשל "בבלי/בבא קמא/ב") */
+/** בונה את שם עמוד הוויקיטקסט, למשל ("ברכות", 2, "a") -> "ברכות ב א" */
+function buildPageTitle(masechet, daf, amud) {
+  const dafGematria = numberToGematria(daf);
+  const amudHeb = amud === 'a' ? 'א' : 'ב';
+  return `${masechet} ${dafGematria} ${amudHeb}`;
+}
+
+/** שולף את תוכן הוויקיטקסט הגולמי של דף נתון */
 async function fetchRawWikitext(pageTitle) {
   const resp = await axios.get(WIKISOURCE_API, {
     params: {
@@ -35,19 +49,43 @@ async function fetchRawWikitext(pageTitle) {
 }
 
 /**
+ * מפצל את הוויקיטקסט המלא של העמוד לפי כותרות ברמה 2/3 (== כותרת ==),
+ * ומחזיר מפה { שם_כותרת_מנוקה: תוכן }. תוכן שלפני הכותרת הראשונה
+ * (אם יש - למשל שורות ניווט) מתעלמים ממנו.
+ */
+function splitIntoSections(wikitext) {
+  const headerRegex = /^(={2,3})\s*([^=\n]+?)\s*\1\s*$/gm;
+  const sections = {};
+  let lastTitle = null;
+  let lastIndex = 0;
+  let match;
+
+  while ((match = headerRegex.exec(wikitext)) !== null) {
+    if (lastTitle !== null) {
+      sections[lastTitle] = wikitext.slice(lastIndex, match.index).trim();
+    }
+    lastTitle = match[2].trim();
+    lastIndex = headerRegex.lastIndex;
+  }
+  if (lastTitle !== null) {
+    sections[lastTitle] = wikitext.slice(lastIndex).trim();
+  }
+  return sections;
+}
+
+/**
  * מפרק טקסט ויקי לרשימת קטעים { text, bold }.
  * מזהה טקסט מודגש בתחביר ''' ... ''' (שלוש גרשיים).
  * גם מנקה תבניות בסיסיות {{...}} וקישורים [[יעד|טקסט]] -> טקסט.
  */
 function splitBoldSegments(wikitext) {
-  // ניקוי בסיסי - קישורים, תבניות, הערות שוליים
   let clean = wikitext
-    .replace(/<ref[^>]*>.*?<\/ref>/gs, '')      // הערות שוליים
+    .replace(/<ref[^>]*>.*?<\/ref>/gs, '')
     .replace(/<ref[^>]*\/>/g, '')
-    .replace(/\{\{[^{}]*\}\}/g, '')             // תבניות פשוטות (לא מקוננות)
-    .replace(/\[\[[^\]|]*\|([^\]]*)\]\]/g, '$1')// [[יעד|טקסט מוצג]] -> טקסט מוצג
-    .replace(/\[\[([^\]]*)\]\]/g, '$1')         // [[טקסט]] -> טקסט
-    .replace(/<[^>]+>/g, '');                   // תגי HTML שנותרו
+    .replace(/\{\{[^{}]*\}\}/g, '')
+    .replace(/\[\[[^\]|]*\|([^\]]*)\]\]/g, '$1')
+    .replace(/\[\[([^\]]*)\]\]/g, '$1')
+    .replace(/<[^>]+>/g, '');
 
   const segments = [];
   const regex = /'''(.+?)'''/gs;
@@ -69,65 +107,87 @@ function splitBoldSegments(wikitext) {
   return segments.filter((s) => s.text.length > 0);
 }
 
-/**
- * TODO להתאמה אישית: איך למצוא את שם העמוד המתאים לכל (מסכת, דף, עמוד).
- * מבנה נפוץ בוויקיטקסט (יש לוודא ולהתאים בפועל מול he.wikisource.org):
- *   "בבלי/בבא קמא/ב א"   (מסכת/דף עמוד)
- */
-function buildPageTitle(masechet, daf, amud) {
-  const amudHeb = amud === 'a' ? 'א' : 'ב';
-  return `בבלי/${masechet}/${daf} ${amudHeb}`;
+// שמות הכותרות בוויקיטקסט לכל track שלנו (יכולים להשתנות מעט בין עמודים -
+// למשל רווחים/גרשיים - לכן ההשוואה למטה מתעלמת מגרשיים ורווחים כפולים)
+const SECTION_NAMES = {
+  gemara: ['גמרא'],
+  rashi: ["רש\"י", 'רשי'],
+  tosafot: ['תוספות'],
+};
+
+function normalizeSectionKey(title) {
+  return title.replace(/["'׳]/g, '').replace(/\s+/g, ' ').trim();
 }
 
-/**
- * *** דורש אימות *** - ניחוש סביר למבנה כותרת דפי רש"י בוויקיטקסט,
- * לא אומת בפועל. יש לבדוק ידנית על כמה עמודים בוויקיטקסט לפני שימוש.
- * ייתכן שהמבנה האמיתי שונה (תת-דף עם /רש"י, או section בתוך אותו דף
- * ולא כותרת נפרדת בכלל).
- */
-function buildRashiTitle(masechet, daf, amud) {
-  const amudHeb = amud === 'a' ? 'א' : 'ב';
-  return `בבלי/${masechet}/${daf} ${amudHeb}/רש"י`;
-}
-
-/** *** דורש אימות *** - ראו הערה ב-buildRashiTitle */
-function buildTosafotTitle(masechet, daf, amud) {
-  const amudHeb = amud === 'a' ? 'א' : 'ב';
-  return `בבלי/${masechet}/${daf} ${amudHeb}/תוספות`;
-}
-
-async function scrapeAmud(masechet, daf, amud) {
+/** שולף עמוד שלם ומפרק אותו לשלושת ה-track-ים */
+async function scrapeAmudAll(masechet, daf, amud) {
   const title = buildPageTitle(masechet, daf, amud);
   const wikitext = await fetchRawWikitext(title);
-  const segments = splitBoldSegments(wikitext);
-  return { title, segments };
+  const sections = splitIntoSections(wikitext);
+
+  // בונים מפה מנורמלת של הכותרות שבפועל התקבלו, כדי להתאים גם אם יש
+  // הבדלים קטנים (גרשיים/רווחים) משמות הייחוס שלנו
+  const normalizedSections = {};
+  for (const [key, content] of Object.entries(sections)) {
+    normalizedSections[normalizeSectionKey(key)] = content;
+  }
+
+  const result = { title, tracks: {} };
+  for (const [track, possibleNames] of Object.entries(SECTION_NAMES)) {
+    let content = null;
+    for (const name of possibleNames) {
+      const normalized = normalizeSectionKey(name);
+      if (normalizedSections[normalized] !== undefined) {
+        content = normalizedSections[normalized];
+        break;
+      }
+    }
+    if (content !== null) {
+      const segments = splitBoldSegments(content);
+      result.tracks[track] = { segments, plainText: segments.map((s) => s.text).join(' ') };
+    } else {
+      result.tracks[track] = { segments: [], plainText: '', missing: true };
+    }
+  }
+  return result;
 }
 
-/** שולף track ספציפי (gemara/rashi/tosafot). זורק שגיאה ברורה אם הדף לא נמצא */
+/** נוחות: שולף רק track בודד (עדיין מבצע שליפה של העמוד השלם ברקע) */
 async function scrapeTrack(masechet, daf, amud, track) {
-  const titleBuilders = { gemara: buildPageTitle, rashi: buildRashiTitle, tosafot: buildTosafotTitle };
-  const builder = titleBuilders[track];
-  if (!builder) throw new Error(`track לא מוכר: ${track}`);
+  const all = await scrapeAmudAll(masechet, daf, amud);
+  const data = all.tracks[track];
+  if (!data) throw new Error(`track לא מוכר: ${track}`);
+  if (data.missing) {
+    throw new Error(`הכותרת "${track}" לא נמצאה בעמוד "${all.title}" בוויקיטקסט`);
+  }
+  return { title: all.title, ...data };
+}
 
-  const title = builder(masechet, daf, amud);
-  const wikitext = await fetchRawWikitext(title);
-  const segments = splitBoldSegments(wikitext);
-  return { title, segments, plainText: segments.map((s) => s.text).join(' ') };
+/** תאימות לאחור - שקול ל-scrapeAmudAll אבל מחזיר רק את הגמרא, כמו הגרסה הישנה */
+async function scrapeAmud(masechet, daf, amud) {
+  const all = await scrapeAmudAll(masechet, daf, amud);
+  return { title: all.title, segments: all.tracks.gemara.segments };
 }
 
 module.exports = {
-  fetchRawWikitext, splitBoldSegments, buildPageTitle, buildRashiTitle, buildTosafotTitle,
-  scrapeAmud, scrapeTrack,
+  fetchRawWikitext, splitBoldSegments, splitIntoSections, buildPageTitle,
+  scrapeAmud, scrapeTrack, scrapeAmudAll,
 };
 
-// הרצה ישירה לבדיקה: node pipeline/scrapeWikitext.js "בבא קמא" 2 a
+// הרצה ישירה לבדיקה: node pipeline/scrapeWikitext.js "ברכות" 2 a
 if (require.main === module) {
   const [masechet, dafStr, amud] = process.argv.slice(2);
   if (!masechet || !dafStr || !amud) {
     console.log('שימוש: node pipeline/scrapeWikitext.js "<מסכת>" <דף> <a|b>');
     process.exit(1);
   }
-  scrapeAmud(masechet, parseInt(dafStr, 10), amud)
-    .then((r) => console.log(JSON.stringify(r, null, 2)))
+  scrapeAmudAll(masechet, parseInt(dafStr, 10), amud)
+    .then((r) => {
+      console.log(`כותרת העמוד: ${r.title}`);
+      for (const [track, data] of Object.entries(r.tracks)) {
+        console.log(`\n=== ${track} ${data.missing ? '(לא נמצא!)' : `(${data.segments.length} קטעים)`} ===`);
+        console.log(data.plainText.slice(0, 300));
+      }
+    })
     .catch((e) => { console.error(e.message); process.exit(1); });
 }
