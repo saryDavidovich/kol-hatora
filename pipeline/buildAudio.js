@@ -13,6 +13,36 @@ const { execFile } = require('child_process');
 const { synthesizeToFile, tempSegmentPath } = require('./ttsProvider');
 const { getDurationSeconds } = require('../server/audioEngine');
 
+// Google Cloud TTS מגביל כל בקשה ל-5000 בייט (לא תווים!). עברית היא
+// UTF-8 דו-בייטית לרוב, כך שבפועל זו מגבלה של כ-2,500 תווים עבריים.
+// משאירים שולי ביטחון (4000 בייט) כדי לא לגעת בקצה בדיוק.
+const MAX_TTS_BYTES = 4000;
+
+/**
+ * מפצל קטע טקסט ארוך למספר תת-קטעים, כל אחד מתחת למגבלת הבייטים של
+ * Google TTS - תוך שמירה על שבירה בין מילים שלמות בלבד (לא באמצע מילה).
+ */
+function splitLongText(text, maxBytes = MAX_TTS_BYTES) {
+  if (Buffer.byteLength(text, 'utf-8') <= maxBytes) return [text];
+
+  const words = text.split(/(\s+)/); // שומר את המפרידים (רווחים) כדי לא לאבד אותם
+  const chunks = [];
+  let current = '';
+
+  for (const word of words) {
+    const candidate = current + word;
+    if (Buffer.byteLength(candidate, 'utf-8') > maxBytes && current.trim()) {
+      chunks.push(current.trim());
+      current = word;
+    } else {
+      current = candidate;
+    }
+  }
+  if (current.trim()) chunks.push(current.trim());
+
+  return chunks;
+}
+
 function run(cmd, args) {
   return new Promise((resolve, reject) => {
     execFile(cmd, args, { maxBuffer: 1024 * 1024 * 50 }, (err, stdout, stderr) => {
@@ -58,6 +88,7 @@ async function buildTrackAudio(opts) {
   for (let i = 0; i < segments.length; i++) {
     const seg = segments[i];
     const voice = seg.bold ? (voiceBold || voiceNormal) : voiceNormal;
+    const subChunks = splitLongText(seg.text); // כמעט תמיד מערך של איבר אחד; מתפצל רק אם ארוך מדי
 
     if (seg.bold && useBeeps) {
       partFiles.push(beepPath);
@@ -65,16 +96,19 @@ async function buildTrackAudio(opts) {
       cursorMs += beepDur * 1000;
     }
 
-    const segPath = tempSegmentPath(tmpDir, i);
-    await synthesizeToFile(seg.text, voice, segPath);
-    const durSec = await getDurationSeconds(segPath);
+    for (let sub = 0; sub < subChunks.length; sub++) {
+      const chunkText = subChunks[sub];
+      const segPath = tempSegmentPath(tmpDir, i * 1000 + sub); // מפתח ייחודי גם עם תת-חלוקה
+      await synthesizeToFile(chunkText, voice, segPath);
+      const durSec = await getDurationSeconds(segPath);
 
-    timeline.push({
-      index: i, text: seg.text, bold: seg.bold,
-      startMs: Math.round(cursorMs), endMs: Math.round(cursorMs + durSec * 1000),
-    });
-    cursorMs += durSec * 1000;
-    partFiles.push(segPath);
+      timeline.push({
+        index: i, subIndex: sub, text: chunkText, bold: seg.bold,
+        startMs: Math.round(cursorMs), endMs: Math.round(cursorMs + durSec * 1000),
+      });
+      cursorMs += durSec * 1000;
+      partFiles.push(segPath);
+    }
 
     if (seg.bold && useBeeps) {
       partFiles.push(beepPath);
@@ -102,4 +136,4 @@ async function buildTrackAudio(opts) {
   return { wavPath: outWav, timelinePath: path.join(outDir, `${trackName}.timeline.json`), durationMs: cursorMs };
 }
 
-module.exports = { buildTrackAudio };
+module.exports = { buildTrackAudio, splitLongText };
