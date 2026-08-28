@@ -379,12 +379,13 @@ async function renderVoiceSettings() {
     try {
       const resp = await fetch('/admin/api/voices/preview', {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ voice }),
       });
-      if (!resp.ok) throw new Error((await resp.json()).error || 'שגיאה');
-      const blob = await resp.blob();
-      audioEl.src = URL.createObjectURL(blob);
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || 'שגיאה');
+      audioEl.src = `data:audio/wav;base64,${data.audioBase64}`;
       audioEl.style.display = 'block';
       audioEl.play();
     } catch (e) {

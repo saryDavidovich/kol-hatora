@@ -267,6 +267,9 @@ router.get('/voices', async (req, res) => {
 });
 
 // --- נגינת משפט לדוגמה בקול נבחר, כדי לשמוע לפני שבוחרים ---
+// הערה: התגובה מוחזרת כ-JSON עם base64 (לא כקובץ בינארי ישיר) - חלק
+// ממערכות סינון תוכן (כמו נטפרי) מסמנות תגובות בינאריות מבקשות POST
+// כ"חשודות" באופן אוטומטי; JSON רגיל נוטה לעורר פחות חשד כזה.
 router.post('/voices/preview', async (req, res) => {
   const { voice, text } = req.body;
   if (!voice) return res.status(400).json({ error: 'חסר שם קול' });
@@ -277,7 +280,7 @@ router.post('/voices/preview', async (req, res) => {
   try {
     await synthesizeToFile(sampleText, voice, tmpPath);
     const audioBuffer = await fs.readFile(tmpPath);
-    res.type('audio/wav').send(audioBuffer);
+    res.json({ audioBase64: audioBuffer.toString('base64') });
   } catch (err) {
     res.status(502).json({ error: err.message });
   } finally {
