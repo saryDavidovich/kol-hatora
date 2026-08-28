@@ -59,16 +59,26 @@ async function synthesizeToFile(text, voice, outPath) {
 
   const fixedText = applyPhoneticFixes(text);
 
-  const resp = await axios.post(
-    `${GOOGLE_TTS_URL}?key=${GOOGLE_TTS_API_KEY}`,
-    {
-      input: { text: fixedText },
-      voice: { languageCode: 'he-IL', name: voice },
-      // LINEAR16 = WAV גולמי (PCM) - נוח להמשך עיבוד ב-ffmpeg בשלב buildAudio.js
-      audioConfig: { audioEncoding: 'LINEAR16', sampleRateHertz: 24000 },
-    },
-    { headers: { 'Content-Type': 'application/json' }, timeout: 30000 }
-  );
+  let resp;
+  try {
+    resp = await axios.post(
+      `${GOOGLE_TTS_URL}?key=${GOOGLE_TTS_API_KEY}`,
+      {
+        input: { text: fixedText },
+        voice: { languageCode: 'he-IL', name: voice },
+        // LINEAR16 = WAV גולמי (PCM) - נוח להמשך עיבוד ב-ffmpeg בשלב buildAudio.js
+        audioConfig: { audioEncoding: 'LINEAR16', sampleRateHertz: 24000 },
+      },
+      { headers: { 'Content-Type': 'application/json' }, timeout: 30000 }
+    );
+  } catch (err) {
+    // חושפים את הודעת השגיאה האמיתית שגוגל מחזירה (למשל שם קול שגוי,
+    // חריגה ממכסה, בעיית חיוב) - במקום רק "Request failed with status code 400"
+    const googleMessage = err.response && err.response.data && err.response.data.error
+      ? err.response.data.error.message
+      : err.message;
+    throw new Error(`Google TTS נכשל (קול: ${voice}): ${googleMessage}`);
+  }
 
   if (!resp.data || !resp.data.audioContent) {
     throw new Error('תגובה לא צפויה מ-Google TTS - חסר audioContent');
