@@ -37,10 +37,18 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
 // שלב 2: אחרי שגוף הבקשה כבר פוענח - מדפיסים גם אותו (רק לנתיבים
-// הרלוונטיים לימות, כדי לא להציף את הלוג עם תעבורת ממשק הניהול)
+// הרלוונטיים לימות, כדי לא להציף את הלוג עם תעבורת ממשק הניהול),
+// וגם עוטפים את res.send כדי לרשום ללוג בדיוק מה נשלח בחזרה
 app.use((req, res, next) => {
-  if (req.originalUrl.startsWith('/api/') && Object.keys(req.body || {}).length) {
-    console.log('  body:', JSON.stringify(req.body).slice(0, 500));
+  if (req.originalUrl.startsWith('/api/')) {
+    if (Object.keys(req.body || {}).length) {
+      console.log('  body:', JSON.stringify(req.body).slice(0, 500));
+    }
+    const originalSend = res.send.bind(res);
+    res.send = (data) => {
+      console.log('  >>> תשובה שנשלחת:', String(data).slice(0, 800));
+      return originalSend(data);
+    };
   }
   next();
 });
