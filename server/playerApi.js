@@ -20,6 +20,7 @@
 //   ApiPhone  - מספר המתקשר
 
 const express = require('express');
+const fs = require('fs-extra');
 const router = express.Router();
 
 const db = require('./db');
@@ -65,10 +66,16 @@ router.all('/control', (req, res) => {
   });
 
   if (pressKey === '2') {
-    return handleCommentaryMenu(req, res, phone, current, params);
+    return toggleTrack(req, res, phone, current, playStopMs, 'rashi');
+  }
+  if (pressKey === '0') {
+    return toggleTrack(req, res, phone, current, playStopMs, 'tosafot');
   }
   if (pressKey === '8') {
-    return handleInfoMenu(req, res, phone, current, params);
+    return jumpDaf(req, res, phone, current, +1);
+  }
+  if (pressKey === '*') {
+    return jumpDaf(req, res, phone, current, -1);
   }
 
   // ברירת מחדל: חוזרים להשמעה מאותה נקודה בדיוק
@@ -76,85 +83,48 @@ router.all('/control', (req, res) => {
   return res.send(proto.goToFolderAndPlay(folder, file, playStopMs));
 });
 
-/** תפריט מפרשים: רש"י (1) / תוספות (2) / חזרה לגמרא (8) */
-function handleCommentaryMenu(req, res, phone, current, params) {
-  if (!params.commentary_choice) {
-    return res.send(
-      proto.read(
-        [proto.textItem('לרש"י הקישו 1. לתוספות הקישו 2. לחזרה לגמרא הקישו 8')],
-        'commentary_choice',
-        { maxDigits: 1 }
-      )
-    );
-  }
+/**
+ * מעבר ישיר למפרש (או חזרה לגמרא אם כבר נמצאים באותו מפרש) - פעולה
+ * אחת מיידית, בלי read/תת-תפריט (זה מה שלא עבד בגרסה הקודמת: ניסיון
+ * לבקש עוד הקשה תוך כדי send_api מתוך playfile לא נתמך בפועל).
+ */
+function toggleTrack(req, res, phone, current, playStopMs, targetTrack) {
+  // שומרים את המיקום הנוכחי לפני שעוברים (כבר נשמר למעלה ב-router.all,
+  // אבל ליתר ביטחון אם הפונקציה נקראת גם ממקום אחר בעתיד)
+  const actualTarget = current.track === targetTrack ? 'gemara' : targetTrack;
 
-  let targetTrack;
-  if (params.commentary_choice === '1') targetTrack = 'rashi';
-  else if (params.commentary_choice === '2') targetTrack = 'tosafot';
-  else targetTrack = 'gemara';
-
-  const trackFile = contentIndex.trackFile(current.masechet, current.daf, current.amud, targetTrack);
-  const fs = require('fs-extra');
+  const trackFile = contentIndex.trackFile(current.masechet, current.daf, current.amud, actualTarget);
   if (!fs.existsSync(trackFile)) {
+    const { folder, file } = folderFor(current.masechet, current.daf, current.amud, current.track);
     return res.send(proto.chain(
       proto.idListMessage([proto.textItem('המפרש המבוקש אינו זמין לעמוד זה')]),
-      proto.goToFolderAndPlay(
-        folderFor(current.masechet, current.daf, current.amud, current.track).folder,
-        current.track,
-        0
-      ),
+      proto.goToFolderAndPlay(folder, file, playStopMs),
     ));
   }
 
-  // שולפים את המיקום האחרון שנשמר עבור הטראק הזה (0 אם נכנסים אליו לראשונה)
-  const savedOffset = db.getPosition(phone, current.masechet, current.daf, current.amud, targetTrack);
-  db.setCallState(phone, { track: targetTrack });
+  const savedOffset = db.getPosition(phone, current.masechet, current.daf, current.amud, actualTarget);
+  db.setCallState(phone, { track: actualTarget });
 
-  const { folder } = folderFor(current.masechet, current.daf, current.amud, targetTrack);
-  return res.send(proto.goToFolderAndPlay(folder, targetTrack, savedOffset));
+  const { folder } = folderFor(current.masechet, current.daf, current.amud, actualTarget);
+  return res.send(proto.goToFolderAndPlay(folder, actualTarget, savedOffset));
 }
 
-/** תפריט מידע: מסכת/דף/עמוד/זמן + מעבר לדף הבא (3) / הקודם (1) */
-function handleInfoMenu(req, res, phone, current, params) {
-  if (!params.nav_choice) {
-    const infoText = `מסכת ${current.masechet}, דף ${current.daf}, עמוד ${current.amud === 'a' ? 'א' : 'ב'}`;
-    return res.send(
-      proto.read(
-        [
-          proto.textItem(infoText),
-          proto.textItem('לדף הקודם הקישו 1. לדף הבא הקישו 3. להמשך הקראה הקישו 8'),
-        ],
-        'nav_choice',
-        { maxDigits: 1 }
-      )
-    );
+/** מעבר ישיר לדף הבא/הקודם (direction: +1/-1) - גם כאן פעולה מיידית אחת */
+function jumpDaf(req, res, phone, current, direction) {
+  const targetDaf = current.daf + direction;
+
+  if (!contentIndex.amudExists(current.masechet, targetDaf, current.amud)) {
+    const { folder, file } = folderFor(current.masechet, current.daf, current.amud, current.track);
+    return res.send(proto.chain(
+      proto.idListMessage([proto.textItem('הדף המבוקש אינו קיים')]),
+      proto.goToFolderAndPlay(folder, file, 0),
+    ));
   }
 
-  let targetDaf = current.daf;
-  if (params.nav_choice === '1') targetDaf = current.daf - 1;
-  else if (params.nav_choice === '3') targetDaf = current.daf + 1;
-
-  if (targetDaf !== current.daf) {
-    if (!contentIndex.amudExists(current.masechet, targetDaf, current.amud)) {
-      return res.send(proto.chain(
-        proto.idListMessage([proto.textItem('הדף המבוקש אינו קיים')]),
-        proto.goToFolderAndPlay(
-          folderFor(current.masechet, current.daf, current.amud, current.track).folder,
-          current.track,
-          0
-        ),
-      ));
-    }
-    db.setCallState(phone, { daf: targetDaf, track: 'gemara' });
-    const savedOffset = db.getPosition(phone, current.masechet, targetDaf, current.amud, 'gemara');
-    const { folder } = folderFor(current.masechet, targetDaf, current.amud, 'gemara');
-    return res.send(proto.goToFolderAndPlay(folder, 'gemara', savedOffset));
-  }
-
-  // "8" - להמשיך מאותה נקודה שבה נעצר כשנכנס לתפריט
-  const { folder, file } = folderFor(current.masechet, current.daf, current.amud, current.track);
-  const offset = db.getPosition(phone, current.masechet, current.daf, current.amud, current.track);
-  return res.send(proto.goToFolderAndPlay(folder, file, offset));
+  db.setCallState(phone, { daf: targetDaf, track: 'gemara' });
+  const savedOffset = db.getPosition(phone, current.masechet, targetDaf, current.amud, 'gemara');
+  const { folder } = folderFor(current.masechet, targetDaf, current.amud, 'gemara');
+  return res.send(proto.goToFolderAndPlay(folder, 'gemara', savedOffset));
 }
 
 module.exports = router;
