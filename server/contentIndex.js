@@ -29,6 +29,27 @@ function loadTopicsIndex() {
   return fs.readJsonSync(p);
 }
 
+/**
+ * זריעה אוטומטית: אם index.json חסר (וואלום חדש/ריק, דיפלוי ראשון,
+ * או כל סיבה אחרת) - כותבים אותו מיד מתוך הרשימה המשותפת ב-
+ * pipeline/topicsData.js. כך התפריט הראשי תמיד יעבוד בלי תלות בסדר
+ * הפעולות של המנהל (אין צורך להריץ סקריפט נפרד ידנית אחרי כל שינוי
+ * בתשתית האחסון, כמו מעבר בין נתיב יחסי ל-Volume).
+ */
+function ensureTopicsIndex() {
+  const p = path.join(CONTENT_ROOT, 'index.json');
+  if (fs.existsSync(p)) return;
+  try {
+    const { topics } = require('../pipeline/topicsData');
+    fs.ensureDirSync(CONTENT_ROOT);
+    fs.writeJsonSync(p, { topics }, { spaces: 2 });
+    console.log(`[contentIndex] נוצר index.json אוטומטית ב-${p}`);
+  } catch (err) {
+    console.error(`[contentIndex] נכשל ביצירת index.json אוטומטית: ${err.message}`);
+  }
+}
+ensureTopicsIndex();
+
 function amudDir(masechet, daf, amud) {
   const dafPadded = String(daf).padStart(3, '0');
   return path.join(CONTENT_ROOT, 'shas', masechet, `daf-${dafPadded}`, amud);
