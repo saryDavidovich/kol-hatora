@@ -1,19 +1,28 @@
 // pipeline/uploadToYemot.js
 //
 // מעלה את קבצי האודיו + קובץ ה-ext.ini שנוצרו לכל עמוד, לשלוחה המתאימה
-// בימות המשיח, באמצעות ה-API הרשמי לניהול מערכות ("API - גישת מפתחים
-// למערכות", לא לבלבל עם "מודול API" ה-IVR-facing שמשמש את server/).
+// בימות המשיח, באמצעות ה-API הרשמי לניהול מערכות.
 //
-// *** חשוב - נקודה הדורשת אימות לפני שימוש בפרודקשן ***
-// לא אימתתי במלואו את הנתיבים/פרמטרים המדויקים של ה-endpoints הבאים
-// (Login, קבלת token, ואופן העלאת קובץ) מול התיעוד המלא בכתובת:
-//   https://f2.freeivr.co.il/topic/55/api-גישת-מפתחים-למערכות
-// לפני הרצה על תוכן אמיתי - יש לפתוח את התיעוד המלא, לוודא את שמות
-// הפרמטרים המדויקים (login/token/upload), ולהתאים את הפונקציות למטה.
-// המבנה הכללי (login -> token -> קריאות מאומתות עם token) כן מאומת.
+// *** תחביר מאומת בפועל *** מול דוגמאות קוד עובדות שנמצאו בפורום
+// מפתחי ימות (f2.freeivr.co.il, topics 55/7618/1079):
+//
+// UploadFile (קבצים בינאריים, למשל WAV):
+//   POST https://www.call2all.co.il/ym/api/UploadFile?token=<TOKEN>
+//   גוף הבקשה: multipart/form-data עם שני שדות:
+//     Upload = תוכן הקובץ הגולמי
+//     path   = "ivr2:<נתיב מלא כולל שם קובץ>"  (שימו לב לקידומת ivr2:)
+//
+// UploadTextFile (קבצי טקסט, למשל ext.ini):
+//   POST https://www.call2all.co.il/ym/api/UploadTextFile
+//   פרמטרים (query string): token, what="ivr2:<נתיב מלא>", contents=<טקסט>
+//
+// login עדיין לא אומת באותה רמת ודאות (לא נמצאה דוגמה מלאה של תגובת
+// ה-Login), אבל הצורה במשתמש/סיסמה -> טוקן ב-JSON היא הדפוס הסביר
+// ביותר ותואמת קטעי קוד חלקיים שכן נמצאו.
 
 require('dotenv').config();
 const axios = require('axios');
+const FormData = require('form-data');
 const fs = require('fs-extra');
 const path = require('path');
 
@@ -23,55 +32,90 @@ const YEMOT_PASSWORD = process.env.YEMOT_PASSWORD;
 
 let cachedToken = null;
 
+function extractYemotError(err) {
+  if (err.response && err.response.data) {
+    const d = err.response.data;
+    return typeof d === 'string' ? d.slice(0, 300) : JSON.stringify(d).slice(0, 300);
+  }
+  return err.message;
+}
+
 async function login() {
   if (cachedToken) return cachedToken;
   if (!YEMOT_USERNAME || !YEMOT_PASSWORD) {
     throw new Error('חסרים YEMOT_USERNAME / YEMOT_PASSWORD ב-.env');
   }
-  // TODO לאימות סופי: שם הפעולה/הנתיב המדויק לפי תיעוד ה-API הרשמי
-  const resp = await axios.get(`${YEMOT_API_BASE}/Login`, {
-    params: { username: YEMOT_USERNAME, password: YEMOT_PASSWORD },
-  });
-  if (!resp.data || !resp.data.token) {
-    throw new Error(`התחברות לימות נכשלה: ${JSON.stringify(resp.data)}`);
+  try {
+    const resp = await axios.get(`${YEMOT_API_BASE}/Login`, {
+      params: { username: YEMOT_USERNAME, password: YEMOT_PASSWORD },
+    });
+    if (!resp.data || !resp.data.token) {
+      throw new Error(`התחברות לימות נכשלה: ${JSON.stringify(resp.data)}`);
+    }
+    cachedToken = resp.data.token;
+    return cachedToken;
+  } catch (err) {
+    throw new Error(`Login לימות נכשל: ${extractYemotError(err)}`);
   }
-  cachedToken = resp.data.token;
-  return cachedToken;
 }
 
 /**
- * מעלה קובץ בודד לנתיב שלוחה מסוים.
- * @param remoteFolder  נתיב השלוחה בימות, למשל '/20/bava-kama/002/a'
- * @param remoteFileName שם הקובץ ביעד, כולל סיומת ('gemara.wav', 'ext.ini')
+ * מעלה קובץ בינארי (כמו WAV) - multipart/form-data עם שדה 'Upload'.
+ * @param remoteFolder  נתיב השלוחה בימות, למשל '/20/ברכות/002/a' (בלי ivr2:)
+ * @param remoteFileName שם הקובץ ביעד, כולל סיומת ('gemara.wav')
  * @param localFilePath נתיב הקובץ המקומי להעלאה
  */
 async function uploadFile(remoteFolder, remoteFileName, localFilePath) {
   const token = await login();
   const fileBuffer = await fs.readFile(localFilePath);
+  const fullPath = `ivr2:${remoteFolder}/${remoteFileName}`;
 
-  // TODO לאימות סופי: שם הפעולה/הפרמטרים המדויקים להעלאת קובץ
-  // (ייתכן שנדרש multipart/form-data ולא raw buffer - יש לוודא מול התיעוד)
-  await axios.post(`${YEMOT_API_BASE}/UploadFile`, fileBuffer, {
-    params: { token, path: `${remoteFolder}/${remoteFileName}` },
-    headers: { 'Content-Type': 'application/octet-stream' },
-  });
+  const form = new FormData();
+  form.append('Upload', fileBuffer, { filename: remoteFileName });
+  form.append('path', fullPath);
+
+  try {
+    await axios.post(`${YEMOT_API_BASE}/UploadFile`, form, {
+      params: { token },
+      headers: form.getHeaders(),
+      maxBodyLength: Infinity,
+      maxContentLength: Infinity,
+    });
+  } catch (err) {
+    throw new Error(`UploadFile נכשל (${fullPath}): ${extractYemotError(err)}`);
+  }
 }
 
-/** מעלה עמוד שלם: שלושת קבצי האודיו + timeline.json + ext.ini */
+/**
+ * מעלה קובץ טקסט (כמו ext.ini) - query params פשוטים, בלי multipart.
+ * @param remoteFolder  נתיב השלוחה בימות (בלי ivr2:)
+ * @param remoteFileName שם הקובץ ביעד (כולל סיומת, למשל 'ext.ini')
+ * @param contents       תוכן הטקסט עצמו
+ */
+async function uploadTextFile(remoteFolder, remoteFileName, contents) {
+  const token = await login();
+  const fullPath = `ivr2:${remoteFolder}/${remoteFileName}`;
+
+  try {
+    await axios.post(`${YEMOT_API_BASE}/UploadTextFile`, null, {
+      params: { token, what: fullPath, contents },
+    });
+  } catch (err) {
+    throw new Error(`UploadTextFile נכשל (${fullPath}): ${extractYemotError(err)}`);
+  }
+}
+
+/** מעלה עמוד שלם: כל קבצי האודיו (בינארי) + ext.ini (טקסט) */
 async function uploadAmud({ localDir, remoteFolder, extIniContent }) {
   const files = await fs.readdir(localDir);
   for (const fileName of files) {
     const localPath = path.join(localDir, fileName);
     const stat = await fs.stat(localPath);
     if (stat.isDirectory()) continue;
+    if (fileName.endsWith('.json')) continue; // meta.json/timeline - לא צריך להעלות לימות
     await uploadFile(remoteFolder, fileName, localPath);
   }
-
-  // כתיבת ext.ini זמנית והעלאתו
-  const tmpExtPath = path.join(localDir, '.ext.ini.tmp');
-  await fs.writeFile(tmpExtPath, extIniContent, 'utf-8');
-  await uploadFile(remoteFolder, 'ext.ini', tmpExtPath);
-  await fs.remove(tmpExtPath);
+  await uploadTextFile(remoteFolder, 'ext.ini', extIniContent);
 }
 
-module.exports = { login, uploadFile, uploadAmud };
+module.exports = { login, uploadFile, uploadTextFile, uploadAmud };

@@ -17,6 +17,7 @@
   "dependencies": {
     "express": "^4.19.2",
     "cookie-parser": "^1.4.6",
+    "form-data": "^4.0.0",
     "better-sqlite3": "^11.3.0",
     "axios": "^1.7.7",
     "fs-extra": "^11.2.0",
