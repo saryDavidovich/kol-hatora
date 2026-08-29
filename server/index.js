@@ -23,9 +23,27 @@ const adminAuth = require('./adminAuth');
 const adminRoutes = require('./adminRoutes');
 
 const app = express();
+
+// רישום כל בקשה נכנסת ללוג - קריטי לאבחון תקלות עם ימות, כי בלי זה
+// אין דרך לדעת אם בקשה בכלל הגיעה או שהיא נעלמה איפשהו בדרך.
+// שלב 1: שיטה+נתיב, מודפס מיד (עוד לפני פענוח גוף הבקשה).
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl}`);
+  next();
+});
+
 app.use(cookieParser());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
+
+// שלב 2: אחרי שגוף הבקשה כבר פוענח - מדפיסים גם אותו (רק לנתיבים
+// הרלוונטיים לימות, כדי לא להציף את הלוג עם תעבורת ממשק הניהול)
+app.use((req, res, next) => {
+  if (req.originalUrl.startsWith('/api/') && Object.keys(req.body || {}).length) {
+    console.log('  body:', JSON.stringify(req.body).slice(0, 500));
+  }
+  next();
+});
 
 app.use('/api/player', playerRoutes);
 
