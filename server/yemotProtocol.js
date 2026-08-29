@@ -55,14 +55,19 @@ function goToFolderAndPlay(folderPath, fileNameOrFullPath, offsetMs = 0) {
  * בונה בקשת read - משמיע הודעה ומבקש הקשה, שתחזור לשרת בבקשה הבאה
  * תחת השם שצוין ב-paramName.
  *
+ * תחביר מאומת מול דוגמת קוד עובדת בפועל (פורום מפתחים ימות):
+ *   read=<תוכן להשמעה>=<param>,<confirm>,<max>,<min>,<timeout>,<extra>
+ * confirm='no' חשוב מאוד - אם 'yes', ימות משמיע חזרה את מה שהוקש
+ * ומבקש אישור ("הקש 1 לאישור, 2 לתיקון") לפני שממשיך - זו לרוב חוויה
+ * מיותרת לתפריטי ניווט פשוטים (בחירת דף/עמוד וכו').
+ *
  * @param promptItems  מערך פריטי id_list_message להשמעה (t-/f-/m-)
  * @param paramName    שם הפרמטר שבו תישמר ההקשה (יחזור בבקשה הבאה מהשרת)
- * @param opts         { maxDigits, minDigits, timeoutSec }
+ * @param opts         { maxDigits, minDigits, timeoutSec, confirm }
  */
 function read(promptItems, paramName, opts = {}) {
-  const { maxDigits = 2, minDigits = 1, timeoutSec = 15 } = opts;
-  // תחביר: read=<תוכן להשמעה>=<param>,,<max>,<min>,<timeout>,Digits,yes
-  return `read=${promptItems.join('.')}=${paramName},,${maxDigits},${minDigits},${timeoutSec},Digits,yes`;
+  const { maxDigits = 2, minDigits = 1, timeoutSec = 15, confirm = 'no' } = opts;
+  return `read=${promptItems.join('.')}=${paramName},${confirm},${maxDigits},${minDigits},${timeoutSec},No`;
 }
 
 /** שרשור מספר פעולות לתגובה אחת */
