@@ -68,8 +68,20 @@ router.all('/control', (req, res) => {
   if (pressKey === '8') {
     return jumpDaf(req, res, phone, current, +1);
   }
-  if (pressKey === '*') {
+  if (pressKey === '#') {
     return jumpDaf(req, res, phone, current, -1);
+  }
+  // תפריט "אפשרויות נוספות" הילידי שולח את שני המקשים יחד עם מקף
+  // ביניהם (למשל "*-1") - זו הבחירה הסופית של המאזין בתוך התפריט
+  if (pressKey === '*-1') {
+    return toggleTrack(req, res, phone, current, playStopMs, 'rashi');
+  }
+  if (pressKey === '*-2') {
+    return toggleTrack(req, res, phone, current, playStopMs, 'tosafot');
+  }
+  if (pressKey === '*-8') {
+    // חזרה מפורשת לגמרא (גם אם כבר בגמרא - אין נזק, toggleTrack מטפל בזה)
+    return toggleTrack(req, res, phone, current, playStopMs, 'gemara');
   }
 
   // ברירת מחדל: חוזרים להשמעה מאותה נקודה בדיוק
@@ -82,6 +94,31 @@ router.all('/control', (req, res) => {
  * אחת מיידית, בלי read/תת-תפריט (זה מה שלא עבד בגרסה הקודמת: ניסיון
  * לבקש עוד הקשה תוך כדי send_api מתוך playfile לא נתמך בפועל).
  */
+/**
+ * מעבר ישיר למפרש (או חזרה לגמרא אם כבר נמצאים באותו מפרש) - פעולה
+ * אחת מיידית, בלי read/תת-תפריט. *** זו הגישה היחידה שהוכחה כעובדת
+ * אמין בבדיקה בפועל *** - ניסיונות עם תת-תפריט (read) נכשלו פעמיים
+ * בדרכים שונות (ראה הערה ב-ext-playfile-daf-template.ini).
+ */
+function toggleTrack(req, res, phone, current, playStopMs, targetTrack) {
+  const actualTarget = current.track === targetTrack ? 'gemara' : targetTrack;
+
+  const trackFile = contentIndex.trackFile(current.masechet, current.daf, current.amud, actualTarget);
+  if (!fs.existsSync(trackFile)) {
+    const { folder, file } = folderFor(current.masechet, current.daf, current.amud, current.track);
+    return res.send(proto.chain(
+      proto.idListMessage([proto.textItem('המפרש המבוקש אינו זמין לעמוד זה')]),
+      proto.goToFolderAndPlay(folder, file, playStopMs),
+    ));
+  }
+
+  const savedOffset = db.getPosition(phone, current.masechet, current.daf, current.amud, actualTarget);
+  db.setCallState(phone, { track: actualTarget });
+
+  const { folder } = folderFor(current.masechet, current.daf, current.amud, actualTarget);
+  return res.send(proto.goToFolderAndPlay(folder, actualTarget, savedOffset));
+}
+
 /** מעבר ישיר לדף הבא/הקודם (direction: +1/-1) - פעולה מיידית אחת */
 function jumpDaf(req, res, phone, current, direction) {
   const targetDaf = current.daf + direction;
