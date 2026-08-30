@@ -36,6 +36,7 @@ function topbar(activeCrumbs = '') {
       <nav>
         <a href="#/">דשבורד</a>
         <a href="#/voices">⚙️ הגדרות קול</a>
+        <a href="#/book">📚 עריכת ספר שלם</a>
         <a href="#" id="logoutLink">התנתקות</a>
       </nav>
     </div>`;
@@ -55,6 +56,9 @@ async function render() {
 
   if (hash === '#/' || hash === '') return renderDashboard();
   if (hash === '#/voices') return renderVoiceSettings();
+  if (hash === '#/book') return renderBookPicker();
+  const bookMatch = hash.match(/^#\/book\/([^/]+)$/);
+  if (bookMatch) return renderBookEditor(decodeURIComponent(bookMatch[1]));
 
   const masechetMatch = hash.match(/^#\/masechet\/([^/]+)$/);
   if (masechetMatch) return renderMasechet(decodeURIComponent(masechetMatch[1]));
@@ -183,10 +187,12 @@ async function renderDafEditor(masechet, daf, amud) {
 
     <div class="daf-actions">
       <button class="primary" id="saveBtn">💾 שמור טיוטה</button>
+      <button id="checkAbbrevBtn">🔍 בדוק ראשי תיבות</button>
       <button id="buildBtn">🔊 שלח ל-TTS ובנה אודיו</button>
       <button id="uploadBtn">☁️ העלה לימות</button>
     </div>
     <div class="job-status" id="jobStatus"></div>
+    <div id="dafAbbrevArea" style="margin-top:1rem;"></div>
   `;
 
   wireDafEditorEvents(masechet, daf, amud);
@@ -212,6 +218,45 @@ function column(track, label, text, error) {
 function wireDafEditorEvents(masechet, daf, amud) {
   const getTextarea = (track) => document.querySelector(`textarea[data-track="${track}"]`);
   const jobStatusEl = document.getElementById('jobStatus');
+  const scopeKey = `daf:${daf}${amud}`;
+
+  document.getElementById('checkAbbrevBtn').addEventListener('click', async () => {
+    const texts = {
+      gemara: getTextarea('gemara').value,
+      rashi: getTextarea('rashi').value,
+      tosafot: getTextarea('tosafot').value,
+    };
+    const area = document.getElementById('dafAbbrevArea');
+    area.innerHTML = '<p>סורק...</p>';
+    try {
+      await api(`/book/${encodeURIComponent(masechet)}/scan-abbreviations`, {
+        method: 'POST', body: JSON.stringify({ scope: 'daf', daf, amud, texts }),
+      });
+      await renderAbbrevCards(area, masechet, scopeKey);
+
+      // כפתור "החל הגהות" ספציפי לדף הזה - מציבים בסוף האזור
+      const applyBtn = document.createElement('button');
+      applyBtn.className = 'primary';
+      applyBtn.textContent = '✅ החל הגהות מאושרות על הטקסט';
+      applyBtn.style.marginTop = '0.8rem';
+      applyBtn.addEventListener('click', async () => {
+        try {
+          const r = await api(`/book/${encodeURIComponent(masechet)}/apply-abbreviations`, {
+            method: 'POST', body: JSON.stringify({ scope: scopeKey, texts }),
+          });
+          getTextarea('gemara').value = r.texts.gemara || '';
+          getTextarea('rashi').value = r.texts.rashi || '';
+          getTextarea('tosafot').value = r.texts.tosafot || '';
+          alert(`הוחלו ${r.appliedCount} הגהות - זכרו לשמור טיוטה!`);
+        } catch (e) {
+          alert(e.message);
+        }
+      });
+      area.appendChild(applyBtn);
+    } catch (e) {
+      area.innerHTML = `<p class="column-error">שגיאה: ${e.message}</p>`;
+    }
+  });
 
   // כפתורי "משוך מחדש" ו"הוסף ניקוד" בכל עמודה
   document.querySelectorAll('.column-toolbar button').forEach((btn) => {
@@ -412,4 +457,173 @@ async function renderVoiceSettings() {
       statusEl.className = 'job-status error';
     }
   });
+}
+
+// ==================== עזר: כרטיסי הגהת ראשי-תיבות (משותף) ====================
+async function renderAbbrevCards(containerEl, masechet, scopeKey) {
+  const { abbreviations } = await api(`/book/${encodeURIComponent(masechet)}/abbreviations?scope=${encodeURIComponent(scopeKey)}`);
+
+  if (!abbreviations.length) {
+    containerEl.innerHTML = '<p>לא נמצאו ראשי תיבות (או שעדיין לא נסרק).</p>';
+    return;
+  }
+
+  containerEl.innerHTML = `
+    <p>${abbreviations.length} ראשי תיבות נמצאו. ${abbreviations.filter(a => a.status === 'approved').length} כבר אושרו.</p>
+    <div class="daf-grid" style="grid-template-columns: 1fr;">
+      ${abbreviations.map((a) => `
+        <div class="daf-tile" style="text-align:right; cursor:default;">
+          <div style="font-weight:bold; margin-bottom:0.4em;">
+            מקור: דף ${a.daf}${a.amud === 'a' ? 'א' : 'ב'} · ${a.track}
+            ${a.status === 'approved' ? '<span style="color:var(--sage)"> ✓ אושר</span>' : ''}
+          </div>
+          <div style="font-size:0.85rem; color:var(--ink-soft); margin-bottom:0.5em;">
+            ...${a.contextBefore} <strong style="color:var(--wine)">${a.abbreviation}</strong> ${a.contextAfter}...
+          </div>
+          <input type="text" data-id="${a.id}" value="${a.expansion}" style="width:100%; padding:0.4em; margin-bottom:0.4em;" />
+          <button data-approve-id="${a.id}">✓ אשר</button>
+        </div>
+      `).join('')}
+    </div>`;
+
+  containerEl.querySelectorAll('[data-approve-id]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const id = btn.dataset.approveId;
+      const input = containerEl.querySelector(`input[data-id="${id}"]`);
+      btn.disabled = true;
+      try {
+        await api(`/book/${encodeURIComponent(masechet)}/abbreviations/${id}/approve`, {
+          method: 'POST', body: JSON.stringify({ expansion: input.value }),
+        });
+        btn.textContent = '✓ אושר';
+        btn.style.background = 'var(--sage)';
+      } catch (e) {
+        alert(e.message);
+        btn.disabled = false;
+      }
+    });
+  });
+}
+
+// ==================== בורר ספר (עריכת ספר שלם) ====================
+function renderBookPicker() {
+  app.innerHTML = `${topbar()}<div class="content">
+    <h1 class="page-title">עריכת ספר שלם</h1>
+    <p>הקלידו את שם המסכת (כמו שהיא מופיעה בתוכן - למשל "ברכות") ולחצו פתח.</p>
+    <input type="text" id="masechetNameInput" placeholder="שם המסכת" style="padding:0.6em; font-size:1rem; margin-left:0.5em;" />
+    <button class="primary" id="openBookBtn">פתח</button>
+  </div>`;
+  attachTopbarHandlers();
+
+  const go = () => {
+    const name = document.getElementById('masechetNameInput').value.trim();
+    if (name) location.hash = `#/book/${encodeURIComponent(name)}`;
+  };
+  document.getElementById('openBookBtn').addEventListener('click', go);
+  document.getElementById('masechetNameInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') go(); });
+}
+
+// ==================== עורך ספר שלם ====================
+async function renderBookEditor(masechet) {
+  app.innerHTML = `${topbar()}<div class="content"><div class="loading">טוען...</div></div>`;
+  attachTopbarHandlers();
+
+  const state = await api(`/book/${encodeURIComponent(masechet)}/state`);
+  const amudimCount = Object.keys(state.amudim || {}).length;
+
+  document.querySelector('.content').innerHTML = `
+    <div class="breadcrumb"><a href="#/book">עריכת ספר שלם</a> ← ${masechet}</div>
+    <h1 class="page-title">${masechet}</h1>
+
+    <div class="page-frame" style="margin-bottom:1.5rem;">
+      <h3>1. העלאת קובץ מסכת</h3>
+      <p>קובץ HTML עם כותרות &lt;h1&gt; לשם המסכת ו-&lt;h2&gt;דף X.&lt;/h2&gt; לכל מעבר עמוד.
+         נטענו כרגע <strong>${amudimCount}</strong> עמודים.</p>
+      <input type="file" id="masechetFileInput" accept=".html,.htm,.txt" />
+      <button class="primary" id="uploadFileBtn">העלה ופרק</button>
+      <div class="job-status" id="uploadStatus"></div>
+    </div>
+
+    <div class="page-frame" style="margin-bottom:1.5rem;">
+      <h3>2. הגהת ראשי תיבות</h3>
+      <button id="scanBtn">🔍 סרוק ראשי תיבות בכל הספר</button>
+      <button id="applyBtn">✅ החל הגהות מאושרות</button>
+      <div class="job-status" id="abbrevStatus"></div>
+      <div id="abbrevList" style="margin-top:1rem;"></div>
+    </div>
+
+    <div class="page-frame">
+      <h3>3. בנייה והעלאה מרוכזת</h3>
+      <button id="buildAllBtn">🔊 בנה TTS לכל הספר</button>
+      <button id="uploadAllBtn">☁️ העלה הכל לימות</button>
+      <div class="job-status" id="batchStatus"></div>
+    </div>
+  `;
+
+  document.getElementById('uploadFileBtn').addEventListener('click', async () => {
+    const fileInput = document.getElementById('masechetFileInput');
+    const statusEl = document.getElementById('uploadStatus');
+    if (!fileInput.files.length) return alert('בחרו קובץ קודם');
+
+    const formData = new FormData();
+    formData.append('file', fileInput.files[0]);
+    statusEl.textContent = 'מעלה ומפרק...';
+    statusEl.className = 'job-status';
+    try {
+      const resp = await fetch(`/admin/api/book/${encodeURIComponent(masechet)}/upload-file`, {
+        method: 'POST', credentials: 'include', body: formData,
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error);
+      statusEl.textContent = `נטענו ${data.amudimCount} עמודים (${data.masechetName}) ✓`;
+      statusEl.className = 'job-status done';
+    } catch (e) {
+      statusEl.textContent = `שגיאה: ${e.message}`;
+      statusEl.className = 'job-status error';
+    }
+  });
+
+  document.getElementById('scanBtn').addEventListener('click', async () => {
+    const statusEl = document.getElementById('abbrevStatus');
+    statusEl.textContent = 'סורק...';
+    statusEl.className = 'job-status';
+    try {
+      const r = await api(`/book/${encodeURIComponent(masechet)}/scan-abbreviations`, {
+        method: 'POST', body: JSON.stringify({ scope: 'book' }),
+      });
+      statusEl.textContent = `נמצאו ${r.count} ראשי תיבות ✓`;
+      statusEl.className = 'job-status done';
+      await renderAbbrevCards(document.getElementById('abbrevList'), masechet, 'book');
+    } catch (e) {
+      statusEl.textContent = `שגיאה: ${e.message}`;
+      statusEl.className = 'job-status error';
+    }
+  });
+
+  document.getElementById('applyBtn').addEventListener('click', async () => {
+    const statusEl = document.getElementById('abbrevStatus');
+    try {
+      const r = await api(`/book/${encodeURIComponent(masechet)}/apply-abbreviations`, {
+        method: 'POST', body: JSON.stringify({ scope: 'book' }),
+      });
+      statusEl.textContent = `הוחלו ${r.appliedCount} הגהות ✓`;
+      statusEl.className = 'job-status done';
+    } catch (e) {
+      statusEl.textContent = `שגיאה: ${e.message}`;
+      statusEl.className = 'job-status error';
+    }
+  });
+
+  document.getElementById('buildAllBtn').addEventListener('click', async () => {
+    const { jobId } = await api(`/book/${encodeURIComponent(masechet)}/build-all`, { method: 'POST', body: '{}' });
+    await pollJob(jobId, document.getElementById('batchStatus'));
+  });
+
+  document.getElementById('uploadAllBtn').addEventListener('click', async () => {
+    const { jobId } = await api(`/book/${encodeURIComponent(masechet)}/upload-all`, { method: 'POST', body: '{}' });
+    await pollJob(jobId, document.getElementById('batchStatus'));
+  });
+
+  // אם כבר נסרקו ראשי תיבות בעבר - מציגים אותם מיד
+  renderAbbrevCards(document.getElementById('abbrevList'), masechet, 'book').catch(() => {});
 }

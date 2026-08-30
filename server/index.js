@@ -59,6 +59,7 @@ app.use('/api/player', playerRoutes);
 // --- ממשק ניהול (כניסה + עמוד עריכה) ---
 app.post('/admin/api/login', express.json(), adminAuth.handleLogin);
 app.post('/admin/api/logout', adminAuth.handleLogout);
+app.use('/admin/api/book', adminAuth.requireAdminAuth, require('./bookRoutes'));
 app.use('/admin/api', adminAuth.requireAdminAuth, adminRoutes);
 app.use('/admin', express.static(path.join(__dirname, 'public', 'admin')));
 
