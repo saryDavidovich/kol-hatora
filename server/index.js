@@ -14,6 +14,7 @@
 require('dotenv').config();
 const express = require('express');
 const path = require('path');
+const fs = require('fs-extra');
 const cookieParser = require('cookie-parser');
 const contentIndex = require('./contentIndex');
 const db = require('./db');
@@ -166,6 +167,64 @@ function playfileFolderFor(masechet, daf, amud) {
   const dafPadded = String(daf).padStart(3, '0');
   return `/20/${masechet}/${dafPadded}/${amud}`;
 }
+
+/**
+ * שלוחת "תפריט מפרשים" משותפת - שלוחה אחת בלבד לכל המערכת (לא לכל
+ * עמוד בנפרד). מגיעים אליה נייטיבית (go_to_folder, בלי שרת) כשלוחצים
+ * 2 תוך כדי השמעת עמוד - ראה config/ext-api-commentary-menu.ini.
+ *
+ * משתמשת ב-read= בדיוק כמו השלוחה הראשית (מנגנון שכבר הוכח עובד),
+ * במקום send_api ישיר מתוך playfile (שלא הוכח כאמין לבקשת read נוספת).
+ * ההקשר (איזה עמוד המאזין נמצא בו כרגע) נשלף מ-db.getCallState לפי
+ * מספר הטלפון - כבר נשמר שם בכל שלב קודם של הניווט/ההשמעה.
+ */
+app.all('/api/commentary-menu', (req, res) => {
+  const params = { ...req.query, ...req.body };
+  const phone = params.ApiPhone || params.Phone || 'unknown';
+
+  try {
+    const state = db.getCallState(phone);
+    if (!state || !state.masechet) {
+      return res.send(proto.chain(
+        proto.idListMessage([proto.textItem('שגיאה - לא נמצא הקשר לעמוד נוכחי')]),
+        proto.goToFolder('..'),
+      ));
+    }
+
+    if (!params.choice) {
+      return res.send(
+        proto.read([proto.textItem('לרש"י הקישו 1. לתוספות הקישו 2. לחזרה לגמרא הקישו 8')], 'choice', { maxDigits: 1 })
+      );
+    }
+
+    let targetTrack = 'gemara';
+    if (params.choice === '1') targetTrack = 'rashi';
+    else if (params.choice === '2') targetTrack = 'tosafot';
+
+    const dafPadded = String(state.daf).padStart(3, '0');
+    const remoteFolder = `/20/${state.masechet}/${dafPadded}/${state.amud}`;
+
+    if (targetTrack !== 'gemara') {
+      const trackFile = contentIndex.trackFile(state.masechet, state.daf, state.amud, targetTrack);
+      if (!fs.existsSync(trackFile)) {
+        return res.send(proto.chain(
+          proto.idListMessage([proto.textItem('המפרש המבוקש אינו זמין לעמוד זה')]),
+          proto.goToFolder('..'),
+        ));
+      }
+    }
+
+    const offset = db.getPosition(phone, state.masechet, state.daf, state.amud, targetTrack);
+    db.setCallState(phone, { track: targetTrack });
+    return res.send(proto.goToFolderAndPlay(remoteFolder, targetTrack, offset));
+  } catch (err) {
+    console.error(err);
+    return res.send(proto.chain(
+      proto.idListMessage([proto.textItem('אירעה שגיאה זמנית')]),
+      proto.goToFolder('..'),
+    ));
+  }
+});
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', () => {

@@ -65,12 +65,6 @@ router.all('/control', (req, res) => {
     masechet: current.masechet, daf: current.daf, amud: current.amud, track: current.track,
   });
 
-  if (pressKey === '2') {
-    return toggleTrack(req, res, phone, current, playStopMs, 'rashi');
-  }
-  if (pressKey === '0') {
-    return toggleTrack(req, res, phone, current, playStopMs, 'tosafot');
-  }
   if (pressKey === '8') {
     return jumpDaf(req, res, phone, current, +1);
   }
@@ -88,28 +82,7 @@ router.all('/control', (req, res) => {
  * אחת מיידית, בלי read/תת-תפריט (זה מה שלא עבד בגרסה הקודמת: ניסיון
  * לבקש עוד הקשה תוך כדי send_api מתוך playfile לא נתמך בפועל).
  */
-function toggleTrack(req, res, phone, current, playStopMs, targetTrack) {
-  // שומרים את המיקום הנוכחי לפני שעוברים (כבר נשמר למעלה ב-router.all,
-  // אבל ליתר ביטחון אם הפונקציה נקראת גם ממקום אחר בעתיד)
-  const actualTarget = current.track === targetTrack ? 'gemara' : targetTrack;
-
-  const trackFile = contentIndex.trackFile(current.masechet, current.daf, current.amud, actualTarget);
-  if (!fs.existsSync(trackFile)) {
-    const { folder, file } = folderFor(current.masechet, current.daf, current.amud, current.track);
-    return res.send(proto.chain(
-      proto.idListMessage([proto.textItem('המפרש המבוקש אינו זמין לעמוד זה')]),
-      proto.goToFolderAndPlay(folder, file, playStopMs),
-    ));
-  }
-
-  const savedOffset = db.getPosition(phone, current.masechet, current.daf, current.amud, actualTarget);
-  db.setCallState(phone, { track: actualTarget });
-
-  const { folder } = folderFor(current.masechet, current.daf, current.amud, actualTarget);
-  return res.send(proto.goToFolderAndPlay(folder, actualTarget, savedOffset));
-}
-
-/** מעבר ישיר לדף הבא/הקודם (direction: +1/-1) - גם כאן פעולה מיידית אחת */
+/** מעבר ישיר לדף הבא/הקודם (direction: +1/-1) - פעולה מיידית אחת */
 function jumpDaf(req, res, phone, current, direction) {
   const targetDaf = current.daf + direction;
 

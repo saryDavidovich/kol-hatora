@@ -223,9 +223,23 @@ async function scrapeAmud(masechet, daf, amud) {
   return { title: all.title, segments: all.tracks.gemara.segments };
 }
 
+/**
+ * ההפך מ-splitBoldSegments: מרכיב בחזרה מחרוזת טקסט אחת מרשימת קטעים,
+ * כשקטעים מודגשים עטופים ב-''' (בדיוק כמו בתחביר ויקיטקסט המקורי).
+ * שימוש: כשמציגים טקסט לעריכה בממשק הניהול, צריך להראות את סימוני
+ * ההדגשה (לא רק את הטקסט הנקי) - אחרת המידע "מה מודגש" הולך לאיבוד
+ * ברגע שהמנהל שומר/בונה מהטקסט הערוך, כי אין יותר שום דרך לדעת אילו
+ * מילים היו אמורות להיות בקול/צליל שונה.
+ */
+function segmentsToMarkedText(segments) {
+  return segments
+    .map((s) => (s.bold ? `'''${s.text}'''` : s.text))
+    .join(' ');
+}
+
 module.exports = {
   fetchRawWikitext, splitBoldSegments, splitIntoSections, buildPageTitle,
-  scrapeAmud, scrapeTrack, scrapeAmudAll,
+  scrapeAmud, scrapeTrack, scrapeAmudAll, segmentsToMarkedText,
 };
 
 // הרצה ישירה לבדיקה: node pipeline/scrapeWikitext.js "ברכות" 2 a

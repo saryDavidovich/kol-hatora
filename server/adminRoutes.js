@@ -22,7 +22,7 @@ const router = express.Router();
 const drafts = require('./drafts');
 const contentIndex = require('./contentIndex');
 const jobs = require('./jobs');
-const { scrapeAmudAll, scrapeTrack, splitBoldSegments } = require('../pipeline/scrapeWikitext');
+const { scrapeAmudAll, scrapeTrack, splitBoldSegments, segmentsToMarkedText } = require('../pipeline/scrapeWikitext');
 const { addNikud } = require('../pipeline/nikud');
 const { addPunctuation } = require('../pipeline/punctuation');
 const { buildTrackAudio } = require('../pipeline/buildAudio');
@@ -92,7 +92,7 @@ router.get('/daf/:masechet/:daf/:amud', async (req, res) => {
     const { tracks: allTracks } = await scrapeAmudAll(masechet, daf, amud);
     for (const track of ['gemara', 'rashi', 'tosafot']) {
       const data = allTracks[track];
-      tracks[track] = data.plainText;
+      tracks[track] = segmentsToMarkedText(data.segments);
       if (data.missing) tracks[`${track}_error`] = 'הכותרת לא נמצאה בעמוד הזה בוויקיטקסט';
     }
   } catch (err) {
@@ -145,8 +145,8 @@ router.post('/daf/:masechet/:daf/:amud/refetch/:track', async (req, res) => {
   const { masechet, amud, track } = req.params;
   const daf = parseInt(req.params.daf, 10);
   try {
-    const { plainText } = await scrapeTrack(masechet, daf, amud, track);
-    res.json({ text: plainText });
+    const { segments } = await scrapeTrack(masechet, daf, amud, track);
+    res.json({ text: segmentsToMarkedText(segments) });
   } catch (err) {
     res.status(502).json({ error: err.message });
   }
