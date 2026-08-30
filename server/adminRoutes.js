@@ -106,12 +106,29 @@ router.get('/daf/:masechet/:daf/:amud', async (req, res) => {
 });
 
 // --- 4. ניקוד בלבד (דיקטה, חינמי) ---
+/**
+ * מגן על סימוני '''הדגשה''' בזמן שהטקסט עובר דרך שירותים חיצוניים
+ * (ניקוד/פיסוק) - אלה לא "יודעים" שהגרשיים המשולשים הם קוד טכני
+ * שאסור לגעת בו, ועלולים לפצל/להזיז אותם. זה גורם לעשרות קטעי הדגשה
+ * קטנטנים שגויים בזמן הבנייה - שנשמעים כמו "גמגום" (הרבה ביפים
+ * וקטעים קטנים לסירוגין). הפתרון: מחליפים לפני השליחה למחרוזת ניטרלית
+ * שלא תיפגע, ומחזירים בחזרה אחרי קבלת התוצאה.
+ */
+const BOLD_MARK_PLACEHOLDER = '\u0001BOLD\u0001'; // תו בלתי-נראה, לא יתנגש עם טקסט אמיתי
+
+function protectBoldMarks(text) {
+  return text.split("'''").join(BOLD_MARK_PLACEHOLDER);
+}
+function restoreBoldMarks(text) {
+  return text.split(BOLD_MARK_PLACEHOLDER).join("'''");
+}
+
 router.post('/nikud', async (req, res) => {
   const { text, genre } = req.body;
   if (!text) return res.status(400).json({ error: 'חסר טקסט' });
   try {
-    const nikudText = await addNikud(text, genre || 'rabbinic');
-    res.json({ text: nikudText });
+    const nikudText = await addNikud(protectBoldMarks(text), genre || 'rabbinic');
+    res.json({ text: restoreBoldMarks(nikudText) });
   } catch (err) {
     res.status(502).json({ error: `שירות הניקוד נכשל: ${err.message}` });
   }
@@ -123,8 +140,8 @@ router.post('/punctuate', async (req, res) => {
   const { text } = req.body;
   if (!text) return res.status(400).json({ error: 'חסר טקסט' });
   try {
-    const punctuated = await addPunctuation(text);
-    res.json({ text: punctuated });
+    const punctuated = await addPunctuation(protectBoldMarks(text));
+    res.json({ text: restoreBoldMarks(punctuated) });
   } catch (err) {
     res.status(502).json({ error: err.message });
   }
