@@ -66,8 +66,12 @@ async function synthesizeToFile(text, voice, outPath) {
       {
         input: { text: fixedText },
         voice: { languageCode: 'he-IL', name: voice },
-        // LINEAR16 = WAV גולמי (PCM) - נוח להמשך עיבוד ב-ffmpeg בשלב buildAudio.js
-        audioConfig: { audioEncoding: 'LINEAR16', sampleRateHertz: 24000 },
+        // LINEAR16 = WAV גולמי (PCM). *** קצב הדגימה חייב להיות זהה בדיוק
+        // לכל שאר הקבצים שמחוברים יחד בהמשך (קובץ הביפ, הפלט הסופי -
+        // שניהם 8000Hz) *** - אחרת ffmpeg concat demuxer מייצר עיוות/
+        // "גמגום" חמור כשמחברים קבצים בקצבי דגימה שונים, במיוחד בולט
+        // בקטעים עם הרבה קטעי הדגשה (הרבה ביפים לסירוגין, כמו רש"י).
+        audioConfig: { audioEncoding: 'LINEAR16', sampleRateHertz: 8000 },
       },
       { headers: { 'Content-Type': 'application/json' }, timeout: 30000 }
     );

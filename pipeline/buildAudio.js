@@ -19,6 +19,24 @@ const { getDurationSeconds } = require('../server/audioEngine');
 const MAX_TTS_BYTES = 4000;
 
 /**
+ * רשת ביטחון: מאלץ קובץ WAV לפורמט מדויק אחיד (8000Hz, מונו, PCM 16-bit) -
+ * חייב להיות זהה בכל קובץ שמחוברים יחד (ffmpeg concat demuxer דורש
+ * פרמטרים זהים בכל הקבצים, אחרת מקבלים עיוות/"גמגום" בזמן ההשמעה).
+ * מריצים את זה גם אם ttsProvider כבר ביקש 8000Hz ישירות, כדי לכסות
+ * מקרים שבהם ספק ה-TTS מתעלם מהבקשה עבור קול מסוים.
+ */
+async function normalizeToTargetFormat(filePath) {
+  const normalizedPath = filePath.replace(/\.wav$/, '_norm.wav');
+  await new Promise((resolve, reject) => {
+    execFile('ffmpeg', [
+      '-y', '-i', filePath, '-ac', '1', '-ar', '8000', '-acodec', 'pcm_s16le', normalizedPath,
+    ], (err) => (err ? reject(err) : resolve()));
+  });
+  await fs.remove(filePath);
+  await fs.move(normalizedPath, filePath);
+}
+
+/**
  * מפצל קטע טקסט ארוך למספר תת-קטעים, כל אחד מתחת למגבלת הבייטים של
  * Google TTS - תוך שמירה על שבירה בין מילים שלמות בלבד (לא באמצע מילה).
  */
@@ -100,6 +118,7 @@ async function buildTrackAudio(opts) {
       const chunkText = subChunks[sub];
       const segPath = tempSegmentPath(tmpDir, i * 1000 + sub); // מפתח ייחודי גם עם תת-חלוקה
       await synthesizeToFile(chunkText, voice, segPath);
+      await normalizeToTargetFormat(segPath);
       const durSec = await getDurationSeconds(segPath);
 
       timeline.push({
