@@ -58,7 +58,9 @@ async function render() {
   if (hash === '#/' || hash === '') return renderDashboard();
   if (hash === '#/voices') return renderVoiceSettings();
   if (hash === '#/book') return renderBookPicker();
-  if (hash === '#/tree') return renderTreeEditor();
+  if (hash === '#/tree') return renderTreeEditor('root');
+  const treeNodeMatch = hash.match(/^#\/tree\/([^/]+)$/);
+  if (treeNodeMatch) return renderTreeEditor(treeNodeMatch[1]);
   const bookMatch = hash.match(/^#\/book\/([^/]+)$/);
   if (bookMatch) return renderBookEditor(decodeURIComponent(bookMatch[1]));
 
@@ -630,72 +632,80 @@ async function renderBookEditor(masechet) {
   renderAbbrevCards(document.getElementById('abbrevList'), masechet, 'book').catch(() => {});
 }
 
-// ==================== עורך עץ תפריטים ====================
-let treeMasechtotList = [];
+// ==================== עורך עץ תפריטים (ניווט תיקיות - drill-down) ====================
 
-function renderTreeNode(node, numberPrefix, depth, availableMasechtot) {
-  const isRoot = node.id === 'root';
-  const isLeaf = !node.children || node.children.length === 0;
-
-  const linkSelect = isLeaf ? `
-    <select data-link-content="${node.id}" style="font-size:0.8rem; margin-inline-start:0.5em;">
-      <option value="">-- לא מקושר לתוכן --</option>
-      ${availableMasechtot.map((m) => `<option value="${m}" ${node.contentRef === m ? 'selected' : ''}>${m}</option>`).join('')}
-    </select>
-    ${node.contentRef ? `<span style="color:var(--sage); font-size:0.8rem;">✓ מקושר</span>` : ''}
-  ` : '';
-
-  const childrenHtml = (node.children || [])
-    .map((child, i) => renderTreeNode(child, `${numberPrefix}${i + 1}.`, depth + 1, availableMasechtot))
-    .join('');
-
-  return `
-    <div class="tree-node" style="margin-right:${depth * 1.5}rem; margin-bottom:0.4rem;">
-      <div style="display:flex; align-items:center; gap:0.4em; flex-wrap:wrap; background:#fffdf7; border:1px solid var(--rule); border-radius:6px; padding:0.4em 0.6em;">
-        <span style="font-family:var(--font-display); font-weight:bold; min-width:2.5em; color:var(--ink-soft);">${numberPrefix}</span>
-        <span style="flex-grow:1;">${node.name}</span>
-        ${linkSelect}
-        ${!isRoot ? `
-          <button data-action="move-up" data-id="${node.id}" title="הזז למעלה">↑</button>
-          <button data-action="move-down" data-id="${node.id}" title="הזז למטה">↓</button>
-          <button data-action="rename" data-id="${node.id}" title="שנה שם">✏️</button>
-        ` : ''}
-        <button data-action="add-child" data-id="${node.id}" title="הוסף תת-סעיף">+ הוסף</button>
-        ${!isRoot ? `<button data-action="delete" data-id="${node.id}" title="מחק">🗑</button>` : ''}
-      </div>
-      <div>${childrenHtml}</div>
-    </div>`;
+/** מוצא צומת בעץ + שרשרת האבות שלו (לצורך breadcrumb), בצד הלקוח */
+function findNodeWithAncestors(tree, targetId, ancestors = []) {
+  if (tree.id === targetId) return { node: tree, ancestors };
+  for (const child of tree.children || []) {
+    const found = findNodeWithAncestors(child, targetId, [...ancestors, { id: tree.id, name: tree.name }]);
+    if (found) return found;
+  }
+  return null;
 }
 
-async function renderTreeEditor() {
-  app.innerHTML = `${topbar()}<div class="content"><div class="loading">טוען עץ...</div></div>`;
+async function renderTreeEditor(nodeId) {
+  app.innerHTML = `${topbar()}<div class="content"><div class="loading">טוען...</div></div>`;
   attachTopbarHandlers();
 
   const { tree, availableMasechtot } = await api('/menu-tree');
-  treeMasechtotList = availableMasechtot;
+  const found = findNodeWithAncestors(tree, nodeId);
+  if (!found) { location.hash = '#/tree'; return; }
+  const { node, ancestors } = found;
+
+  const breadcrumbHtml = [...ancestors, { id: node.id, name: node.id === 'root' ? 'עץ תפריטים' : node.name }]
+    .map((a, i, arr) => i === arr.length - 1
+      ? `<span>${a.name}</span>`
+      : `<a href="#/tree/${a.id}">${a.name}</a>`)
+    .join(' ← ');
+
+  const isLeaf = !node.children || node.children.length === 0;
+
+  const childrenListHtml = (node.children || []).map((child, i) => {
+    const childIsLeaf = !child.children || child.children.length === 0;
+    return `
+      <div style="display:flex; align-items:center; gap:0.5em; flex-wrap:wrap; background:#fffdf7; border:1px solid var(--rule); border-radius:6px; padding:0.6em 0.8em; margin-bottom:0.5em;">
+        <span style="font-family:var(--font-display); font-weight:bold; color:var(--ink-soft); min-width:2em;">${i + 1}.</span>
+        ${childIsLeaf
+          ? `<span style="flex-grow:1;">${child.name}${child.contentRef ? ' <span style="color:var(--sage); font-size:0.85rem;">✓ מקושר ל-' + child.contentRef + '</span>' : ''}</span>`
+          : `<a href="#/tree/${child.id}" style="flex-grow:1; text-decoration:none; color:var(--wine); font-weight:bold;">📁 ${child.name} (${child.children.length}) ←</a>`
+        }
+        ${childIsLeaf ? `
+          <select data-link-content="${child.id}" style="font-size:0.8rem;">
+            <option value="">-- לא מקושר --</option>
+            ${availableMasechtot.map((m) => `<option value="${m}" ${child.contentRef === m ? 'selected' : ''}>${m}</option>`).join('')}
+          </select>
+        ` : ''}
+        <button data-action="move-up" data-id="${child.id}" title="הזז למעלה">↑</button>
+        <button data-action="move-down" data-id="${child.id}" title="הזז למטה">↓</button>
+        <button data-action="rename" data-id="${child.id}" title="שנה שם">✏️</button>
+        <button data-action="delete" data-id="${child.id}" title="מחק">🗑</button>
+      </div>`;
+  }).join('');
 
   document.querySelector('.content').innerHTML = `
-    <h1 class="page-title">🌳 עץ תפריטים</h1>
-    <p>זהו התפריט שימות המשיח משמיע בפועל, לפי הסדר שמופיע כאן. כל שינוי
-       (הוספה, שינוי שם, הזזה, מחיקה, קישור תוכן) משפיע מיד על השיחה הבאה -
-       אין צורך "לפרסם" בנפרד.</p>
-    <div id="treeContainer"></div>
+    <div class="breadcrumb">${breadcrumbHtml}</div>
+    <h1 class="page-title">${node.id === 'root' ? 'עץ תפריטים' : node.name}</h1>
+    <p>זהו התפריט שימות המשיח משמיע בפועל כאן, לפי הסדר שמופיע למטה. כל שינוי
+       משפיע מיד על השיחה הבאה - אין צורך "לפרסם" בנפרד.
+       ${isLeaf ? ' צומת זה הוא "עלה" (אין לו עדיין תתי-סעיפים).' : ''}</p>
+
+    <div id="childrenContainer">${childrenListHtml || '<p>אין עדיין תתי-סעיפים כאן.</p>'}</div>
+
+    <div class="daf-actions">
+      <input type="text" id="newChildName" placeholder="שם תת-סעיף חדש" style="padding:0.5em;" />
+      <button class="primary" id="addChildBtn">+ הוסף תת-סעיף כאן</button>
+    </div>
   `;
 
-  const container = document.getElementById('treeContainer');
-  container.innerHTML = renderTreeNode(tree, '', 0, availableMasechtot);
+  const container = document.getElementById('childrenContainer');
 
   container.addEventListener('click', async (ev) => {
     const btn = ev.target.closest('button[data-action]');
     if (!btn) return;
     const { action, id } = btn.dataset;
-
     try {
-      if (action === 'add-child') {
-        const name = prompt('שם הסעיף החדש:');
-        if (!name) return;
-        await api(`/menu-tree/node/${id}/add`, { method: 'POST', body: JSON.stringify({ name }) });
-      } else if (action === 'rename') {
+      if (action === 'rename') {
         const newName = prompt('שם חדש:');
         if (!newName) return;
         await api(`/menu-tree/node/${id}/rename`, { method: 'POST', body: JSON.stringify({ name: newName }) });
@@ -707,7 +717,7 @@ async function renderTreeEditor() {
       } else if (action === 'move-down') {
         await api(`/menu-tree/node/${id}/move`, { method: 'POST', body: JSON.stringify({ direction: 1 }) });
       }
-      renderTreeEditor(); // רענון מלא - הכי פשוט ואמין אחרי כל שינוי מבני
+      renderTreeEditor(nodeId);
     } catch (e) {
       alert(e.message);
     }
@@ -716,12 +726,23 @@ async function renderTreeEditor() {
   container.addEventListener('change', async (ev) => {
     const select = ev.target.closest('select[data-link-content]');
     if (!select) return;
-    const id = select.dataset.linkContent;
     try {
-      await api(`/menu-tree/node/${id}/link-content`, {
+      await api(`/menu-tree/node/${select.dataset.linkContent}/link-content`, {
         method: 'POST', body: JSON.stringify({ contentRef: select.value || null }),
       });
-      renderTreeEditor();
+      renderTreeEditor(nodeId);
+    } catch (e) {
+      alert(e.message);
+    }
+  });
+
+  document.getElementById('addChildBtn').addEventListener('click', async () => {
+    const input = document.getElementById('newChildName');
+    const name = input.value.trim();
+    if (!name) return;
+    try {
+      await api(`/menu-tree/node/${node.id}/add`, { method: 'POST', body: JSON.stringify({ name }) });
+      renderTreeEditor(nodeId);
     } catch (e) {
       alert(e.message);
     }

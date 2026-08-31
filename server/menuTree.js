@@ -62,13 +62,49 @@ function seedTree() {
 
 let cachedTree = null;
 
+/**
+ * מיגרציה חד-פעמית: מוודא שכל מסכת שכבר יש לה תוכן בפועל (נבנתה
+ * לפחות עמוד אחד) מופיעה כתת-סעיף תחת "משנה וגמרא" בעץ, ומקושרת
+ * אליה. לא נוגעת בכלום אחר - רק מוסיפה מסכתות שעדיין לא מקושרות
+ * לאף צומת קיים בעץ (בודקת לפי contentRef בכל העץ).
+ */
+function migrateMasechtotIntoTree(tree) {
+  const contentIndex = require('./contentIndex');
+  const MASECHTOT_DAPIM = require('../pipeline/masechtotDapim');
+
+  const gemaraNode = (tree.children || []).find((c) => c.name === 'משנה וגמרא');
+  if (!gemaraNode) return tree; // אין צומת כזה - לא עושים כלום
+
+  // אוספים את כל ה-contentRef הקיימים בעץ, כדי לא לשכפל
+  const linkedRefs = new Set();
+  (function walk(n) {
+    if (n.contentRef) linkedRefs.add(n.contentRef);
+    (n.children || []).forEach(walk);
+  })(tree);
+
+  for (const masechet of Object.keys(MASECHTOT_DAPIM)) {
+    if (linkedRefs.has(masechet)) continue;
+    if (!contentIndex.amudExists(masechet, 2, 'a')) continue; // רק אם באמת נבנה תוכן
+    gemaraNode.children.push({
+      id: makeId(), name: masechet, children: [], leaf: true, contentRef: masechet,
+    });
+    gemaraNode.leaf = false;
+  }
+
+  return tree;
+}
+
 async function getTree() {
   if (cachedTree) return cachedTree;
   if (await fs.pathExists(TREE_FILE)) {
     cachedTree = await fs.readJson(TREE_FILE);
   } else {
     cachedTree = seedTree();
-    await saveTree(cachedTree);
+  }
+  const before = JSON.stringify(cachedTree);
+  cachedTree = migrateMasechtotIntoTree(cachedTree);
+  if (JSON.stringify(cachedTree) !== before) {
+    await saveTree(cachedTree); // רק כותבים בחזרה אם המיגרציה באמת שינתה משהו
   }
   return cachedTree;
 }
