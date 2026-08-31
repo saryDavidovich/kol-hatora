@@ -181,8 +181,19 @@ router.post('/:nodeId/upload', async (req, res) => {
     const localDir = path.join(CONTENT_ROOT, 'node-audio', nodeId);
     if (!(await fs.pathExists(localDir))) throw new Error('יש לבנות את התוכן קודם (כפתור בנייה)');
 
-    // ext.ini פשוט - פקדי ניווט נייטיביים בלבד (בלי תתי-תוכן דרך תפריט
-    // מפרשים - זה קיים כרגע רק למבנה הגמרא הקשיח; להרחבה עתידית)
+    // ext.ini - פקדי ניווט נייטיביים, ובנוסף תפריט "אפשרויות נוספות"
+    // הילידי (מקש *) עם מיפוי דינמי: מקש 1 עד מספר תתי-התוכן בפועל
+    // (עד 7 - מגבלת הקשה בודדת), מקש 8 = חזרה לתוכן הראשי
+    const content = await nodeContent.getContent(nodeId);
+    const subCount = Math.min(content.subContents.length, 7);
+    const moreALines = [];
+    for (let i = 1; i <= subCount; i++) {
+      moreALines.push(`control_play_moreA${i}=send_api`);
+    }
+    if (content.subContents.length > 0) {
+      moreALines.push('control_play_moreA8=send_api'); // חזרה לתוכן הראשי
+    }
+
     const extIniContent = [
       'type=playfile',
       'listening_mark_no_check_for_key_options=minus,plus',
@@ -193,6 +204,9 @@ router.post('/:nodeId/upload', async (req, res) => {
       'control_play7=change_playback_speed_minus',
       'control_play9=change_playback_speed_plus', 'save_change_speed=yes',
       'control_play5=wait', 'control_play_wait_time_max=600',
+      ...moreALines,
+      `api_link=${process.env.API_PLAYER_URL || 'https://YOUR-SERVER-DOMAIN.example.com/api/player/control'}`,
+      'api_url_post=yes',
     ].join('\n');
 
     const remoteFolder = `/${yemotPath.join('/')}`;

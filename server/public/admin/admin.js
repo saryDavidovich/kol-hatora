@@ -842,6 +842,13 @@ async function renderNodeContentEditor(nodeId) {
     </div>
 
     <div class="daf-actions">
+      ${content.subContents.length ? `
+        <p style="font-size:0.85rem; color:var(--ink-soft); margin-top:0.5em;">
+          💡 בשיחה: תוך כדי השמעה, לחיצה על * פותחת תפריט, ואז 1-${Math.min(content.subContents.length, 7)}
+          למעבר לתת-תוכן (לפי הסדר כאן), ו-8 לחזרה לתוכן הראשי.
+          ${content.subContents.length > 7 ? '<br>⚠️ יש יותר מ-7 תתי-תוכן - רק 7 הראשונים נגישים דרך הקשה (מגבלת מקש בודד).' : ''}
+        </p>
+      ` : ''}
       <input type="text" id="newSubName" placeholder="שם תת-תוכן חדש (למשל: ביאור, תרגום)" style="padding:0.5em;" />
       <button id="addSubBtn">+ הוסף תת-תוכן</button>
     </div>

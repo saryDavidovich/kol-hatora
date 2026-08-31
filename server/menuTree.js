@@ -259,7 +259,18 @@ async function reorderChildren(parentId, orderedIds) {
   return found.node.children;
 }
 
+/** ההפך מ-getYemotPath: מוצא צומת לפי נתיב מספרי (אינדקסים 1-based) */
+function findNodeByYemotPath(tree, pathNumbers) {
+  let current = tree;
+  for (const num of pathNumbers) {
+    const idx = num - 1;
+    current = (current.children || [])[idx];
+    if (!current) return null;
+  }
+  return current;
+}
+
 module.exports = {
   getTree, saveTree, findNode, findNodeByPath, addNode, renameNode, deleteNode, moveNode, setContentRef,
-  getYemotPath, findNodeByContentRef, getMasechetYemotFolder, setNodeType, reorderChildren,
+  getYemotPath, findNodeByContentRef, getMasechetYemotFolder, setNodeType, reorderChildren, findNodeByYemotPath,
 };
