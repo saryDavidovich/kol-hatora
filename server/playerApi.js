@@ -42,13 +42,14 @@ function parseWhat(what) {
   return { masechet, daf: parseInt(dafStr, 10), amud, track };
 }
 
-function folderFor(masechet, daf, amud, track) {
-  const dafPadded = String(daf).padStart(3, '0');
-  // track נבחר ע"י שם הקובץ עצמו (gemara/rashi/tosafot) בתוך אותה שלוחת עמוד
-  return { folder: `/20/${masechet}/${dafPadded}/${amud}`, file: track };
+const menuTree = require('./menuTree');
+
+async function folderFor(masechet, daf, amud, track) {
+  const folder = await menuTree.getMasechetYemotFolder(masechet, daf, amud);
+  return { folder, file: track };
 }
 
-router.all('/control', (req, res) => {
+router.all('/control', async (req, res) => {
   const params = { ...req.query, ...req.body };
   const phone = params.ApiPhone || 'unknown';
   const pressKey = params.PressKey;
@@ -85,7 +86,7 @@ router.all('/control', (req, res) => {
   }
 
   // ברירת מחדל: חוזרים להשמעה מאותה נקודה בדיוק
-  const { folder, file } = folderFor(current.masechet, current.daf, current.amud, current.track);
+  const { folder, file } = await folderFor(current.masechet, current.daf, current.amud, current.track);
   return res.send(proto.goToFolderAndPlay(folder, file, playStopMs));
 });
 
@@ -100,12 +101,12 @@ router.all('/control', (req, res) => {
  * אמין בבדיקה בפועל *** - ניסיונות עם תת-תפריט (read) נכשלו פעמיים
  * בדרכים שונות (ראה הערה ב-ext-playfile-daf-template.ini).
  */
-function toggleTrack(req, res, phone, current, playStopMs, targetTrack) {
+async function toggleTrack(req, res, phone, current, playStopMs, targetTrack) {
   const actualTarget = current.track === targetTrack ? 'gemara' : targetTrack;
 
   const trackFile = contentIndex.trackFile(current.masechet, current.daf, current.amud, actualTarget);
   if (!fs.existsSync(trackFile)) {
-    const { folder, file } = folderFor(current.masechet, current.daf, current.amud, current.track);
+    const { folder, file } = await folderFor(current.masechet, current.daf, current.amud, current.track);
     return res.send(proto.chain(
       proto.idListMessage([proto.textItem('המפרש המבוקש אינו זמין לעמוד זה')]),
       proto.goToFolderAndPlay(folder, file, playStopMs),
@@ -115,16 +116,16 @@ function toggleTrack(req, res, phone, current, playStopMs, targetTrack) {
   const savedOffset = db.getPosition(phone, current.masechet, current.daf, current.amud, actualTarget);
   db.setCallState(phone, { track: actualTarget });
 
-  const { folder } = folderFor(current.masechet, current.daf, current.amud, actualTarget);
+  const { folder } = await folderFor(current.masechet, current.daf, current.amud, actualTarget);
   return res.send(proto.goToFolderAndPlay(folder, actualTarget, savedOffset));
 }
 
 /** מעבר ישיר לדף הבא/הקודם (direction: +1/-1) - פעולה מיידית אחת */
-function jumpDaf(req, res, phone, current, direction) {
+async function jumpDaf(req, res, phone, current, direction) {
   const targetDaf = current.daf + direction;
 
   if (!contentIndex.amudExists(current.masechet, targetDaf, current.amud)) {
-    const { folder, file } = folderFor(current.masechet, current.daf, current.amud, current.track);
+    const { folder, file } = await folderFor(current.masechet, current.daf, current.amud, current.track);
     return res.send(proto.chain(
       proto.idListMessage([proto.textItem('הדף המבוקש אינו קיים')]),
       proto.goToFolderAndPlay(folder, file, 0),
@@ -133,7 +134,7 @@ function jumpDaf(req, res, phone, current, direction) {
 
   db.setCallState(phone, { daf: targetDaf, track: 'gemara' });
   const savedOffset = db.getPosition(phone, current.masechet, targetDaf, current.amud, 'gemara');
-  const { folder } = folderFor(current.masechet, targetDaf, current.amud, 'gemara');
+  const { folder } = await folderFor(current.masechet, targetDaf, current.amud, 'gemara');
   return res.send(proto.goToFolderAndPlay(folder, 'gemara', savedOffset));
 }
 

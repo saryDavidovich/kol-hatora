@@ -16,6 +16,7 @@ const { scrapeAmudAll } = require('./scrapeWikitext');
 const { buildTrackAudio } = require('./buildAudio');
 const { uploadAmud } = require('./uploadToYemot');
 const settingsStore = require('../server/settings');
+const menuTree = require('../server/menuTree');
 
 const CONTENT_ROOT = process.env.CONTENT_ROOT || path.join(__dirname, '..', 'data', 'shas-content');
 
@@ -81,7 +82,7 @@ async function processAmud(masechet, daf, amud) {
   const extIniContent = buildExtIni(templatePath, apiPlayerUrl);
 
   // 5) העלאה לימות (מושבת כברירת מחדל - יש להסיר את ההערה אחרי אימות ה-API)
-  const remoteFolder = `/20/${masechet}/${dafPadded}/${amud}`;
+  const remoteFolder = await menuTree.getMasechetYemotFolder(masechet, daf, amud);
   if (process.env.ENABLE_UPLOAD === 'yes') {
     await uploadAmud({ localDir, remoteFolder, extIniContent });
     console.log(`  הועלה בהצלחה ל-${remoteFolder}`);

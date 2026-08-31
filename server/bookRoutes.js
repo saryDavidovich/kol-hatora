@@ -15,6 +15,7 @@ const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
 
 const bookBatch = require('./bookBatch');
+const menuTree = require('./menuTree');
 const jobs = require('./jobs');
 const settings = require('./settings');
 const { parseMasechetFile } = require('../pipeline/parseMasechetFile');
@@ -245,7 +246,7 @@ router.post('/:masechet/upload-all', async (req, res) => {
       }
 
       progress(Math.round((done / keys.length) * 100), `מעלה ${masechet} ${a.daf}${a.amud} (${done + 1}/${keys.length})...`);
-      const remoteFolder = `/20/${masechet}/${dafPadded}/${a.amud}`;
+      const remoteFolder = await menuTree.getMasechetYemotFolder(masechet, a.daf, a.amud);
       await uploadAmud({ localDir, remoteFolder, extIniContent });
       done++;
     }

@@ -186,6 +186,80 @@ async function setContentRef(id, contentRef) {
   return found.node;
 }
 
+/**
+ * מחשב את "נתיב השלוחה" המספרי בימות עבור צומת נתון - בדיוק לפי
+ * המיקום שלו בעץ (סדר האחים ברמה כל רמה). למשל אם "משנה וגמרא" הוא
+ * הכרטיס השני בשורש, וברכות היא הכרטיס הראשון בתוכו - הנתיב יהיה [2,1]
+ * (כלומר שלוחה /2/1 בימות). שינוי סדר (הזזה) משנה את המספור אוטומטית
+ * בפעם הבאה שקוראים לפונקציה הזו - אין מספור "קבוע" שנשמר בנפרד.
+ * צומת השורש עצמו לא נספר (הוא לא מוצג ככרטיס באתר).
+ */
+function getYemotPath(tree, targetId) {
+  function walk(node, currentPath) {
+    if (node.id === targetId) return currentPath;
+    for (let i = 0; i < (node.children || []).length; i++) {
+      const found = walk(node.children[i], [...currentPath, i + 1]);
+      if (found) return found;
+    }
+    return null;
+  }
+  return walk(tree, []);
+}
+
+/** מוצא צומת-עלה לפי contentRef (למשל שם מסכת) - לשימוש כשצריך לחשב נתיב מתוך מזהה תוכן בלבד */
+function findNodeByContentRef(tree, contentRef) {
+  if (tree.contentRef === contentRef) return tree;
+  for (const child of tree.children || []) {
+    const found = findNodeByContentRef(child, contentRef);
+    if (found) return found;
+  }
+  return null;
+}
+
+/**
+ * פונקציית עזר מרכזית: בהינתן מזהה מסכת (contentRef), דף ועמוד - מחזירה
+ * את נתיב השלוחה המלא בימות (מספרי, לפי מיקום בעץ + דף/עמוד בתוכו).
+ * זו הפונקציה היחידה שאמורה לדעת "איך בונים נתיב" - כל שאר הקוד קורא
+ * לה, כדי שלא יהיה מקום אחד ששוכח לעדכן כשמשנים משהו במבנה המספור.
+ */
+async function getMasechetYemotFolder(masechet, daf, amud) {
+  const tree = await getTree();
+  const node = findNodeByContentRef(tree, masechet);
+  if (!node) {
+    throw new Error(`מסכת "${masechet}" לא נמצאה מקושרת בשום מקום בעץ התפריטים`);
+  }
+  const yemotPath = getYemotPath(tree, node.id);
+  if (!yemotPath || !yemotPath.length) {
+    throw new Error(`לא הצלחתי לחשב נתיב שלוחה עבור "${masechet}" - ייתכן שהצומת לא נמצא בעץ בפועל`);
+  }
+  const dafPadded = String(daf).padStart(3, '0');
+  return `/${yemotPath.join('/')}/${dafPadded}/${amud}`;
+}
+
+async function setNodeType(id, type) {
+  const tree = await getTree();
+  const found = findNode(tree, id);
+  if (!found) throw new Error('צומת לא נמצא');
+  found.node.type = type; // 'folder' | 'file'
+  await saveTree(tree);
+  return found.node;
+}
+
+/** מסדר מחדש את סדר הילדים של הורה נתון, לפי מערך מזהים בסדר הרצוי (לגרירה חופשית) */
+async function reorderChildren(parentId, orderedIds) {
+  const tree = await getTree();
+  const found = findNode(tree, parentId);
+  if (!found) throw new Error('צומת הורה לא נמצא');
+  const byId = new Map(found.node.children.map((c) => [c.id, c]));
+  const reordered = orderedIds.map((id) => byId.get(id)).filter(Boolean);
+  if (reordered.length === found.node.children.length) {
+    found.node.children = reordered;
+    await saveTree(tree);
+  }
+  return found.node.children;
+}
+
 module.exports = {
   getTree, saveTree, findNode, findNodeByPath, addNode, renameNode, deleteNode, moveNode, setContentRef,
+  getYemotPath, findNodeByContentRef, getMasechetYemotFolder, setNodeType, reorderChildren,
 };

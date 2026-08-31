@@ -62,6 +62,7 @@ app.post('/admin/api/login', express.json(), adminAuth.handleLogin);
 app.post('/admin/api/logout', adminAuth.handleLogout);
 app.use('/admin/api/book', adminAuth.requireAdminAuth, require('./bookRoutes'));
 app.use('/admin/api/menu-tree', adminAuth.requireAdminAuth, require('./menuTreeRoutes'));
+app.use('/admin/api/node-content', adminAuth.requireAdminAuth, require('./nodeContentRoutes'));
 app.use('/admin/api', adminAuth.requireAdminAuth, adminRoutes);
 app.use('/admin', express.static(path.join(__dirname, 'public', 'admin')));
 
@@ -164,7 +165,7 @@ app.all('/api/ivr/main', async (req, res) => {
 
     db.setCallState(phone, { masechet: masechetId, daf, amud, track: 'gemara', speed: 1.0 });
     const savedOffset = db.getPosition(phone, masechetId, daf, amud, 'gemara');
-    const targetFolder = playfileFolderFor(masechetId, daf, amud);
+    const targetFolder = await playfileFolderFor(masechetId, daf, amud);
 
     return res.send(
       proto.goToFolderAndPlay(targetFolder, 'gemara', savedOffset)
@@ -181,8 +182,7 @@ app.all('/api/ivr/main', async (req, res) => {
  * יש להתאים את הקידומת (למשל '/20') למספר השלוחה הראשית שהקציתם בימות.
  */
 function playfileFolderFor(masechet, daf, amud) {
-  const dafPadded = String(daf).padStart(3, '0');
-  return `/20/${masechet}/${dafPadded}/${amud}`;
+  return menuTree.getMasechetYemotFolder(masechet, daf, amud);
 }
 
 /**
@@ -195,7 +195,7 @@ function playfileFolderFor(masechet, daf, amud) {
  * ההקשר (איזה עמוד המאזין נמצא בו כרגע) נשלף מ-db.getCallState לפי
  * מספר הטלפון - כבר נשמר שם בכל שלב קודם של הניווט/ההשמעה.
  */
-app.all('/api/commentary-menu', (req, res) => {
+app.all('/api/commentary-menu', async (req, res) => {
   const params = { ...req.query, ...req.body };
   const phone = params.ApiPhone || params.Phone || 'unknown';
 
@@ -218,8 +218,7 @@ app.all('/api/commentary-menu', (req, res) => {
     if (params.choice === '1') targetTrack = 'rashi';
     else if (params.choice === '2') targetTrack = 'tosafot';
 
-    const dafPadded = String(state.daf).padStart(3, '0');
-    const remoteFolder = `/20/${state.masechet}/${dafPadded}/${state.amud}`;
+    const remoteFolder = await menuTree.getMasechetYemotFolder(state.masechet, state.daf, state.amud);
 
     if (targetTrack !== 'gemara') {
       const trackFile = contentIndex.trackFile(state.masechet, state.daf, state.amud, targetTrack);

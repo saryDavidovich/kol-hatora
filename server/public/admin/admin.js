@@ -60,6 +60,8 @@ async function render() {
   if (hash === '#/tree') return renderTreeEditor('root');
   const treeNodeMatch = hash.match(/^#\/tree\/([^/]+)$/);
   if (treeNodeMatch) return renderTreeEditor(treeNodeMatch[1]);
+  const genericNodeMatch = hash.match(/^#\/node\/([^/]+)$/);
+  if (genericNodeMatch) return renderNodeContentEditor(genericNodeMatch[1]);
   const bookMatch = hash.match(/^#\/book\/([^/]+)$/);
   if (bookMatch) return renderBookEditor(decodeURIComponent(bookMatch[1]));
 
@@ -661,45 +663,81 @@ async function renderTreeEditor(nodeId) {
   const isLeaf = !node.children || node.children.length === 0;
 
   const childrenListHtml = (node.children || []).map((child, i) => {
-    const childIsLeaf = !child.children || child.children.length === 0;
+    const childType = child.type || (child.children && child.children.length ? 'folder' : 'file');
+    const isFolder = childType === 'folder';
+    const clickHref = isFolder ? `#/tree/${child.id}` : (child.contentRef ? `#/masechet/${encodeURIComponent(child.contentRef)}` : `#/node/${child.id}`);
+
     return `
-      <div style="display:flex; align-items:center; gap:0.5em; flex-wrap:wrap; background:#fffdf7; border:1px solid var(--rule); border-radius:6px; padding:0.6em 0.8em; margin-bottom:0.5em;">
-        <span style="font-family:var(--font-display); font-weight:bold; color:var(--ink-soft); min-width:2em;">${i + 1}.</span>
-        ${childIsLeaf
-          ? (child.contentRef
-              ? `<a href="#/masechet/${encodeURIComponent(child.contentRef)}" style="flex-grow:1; text-decoration:none; color:var(--sage); font-weight:bold;">📖 ${child.name}</a>`
-              : `<span style="flex-grow:1;">${child.name}</span>`)
-          : `<a href="#/tree/${child.id}" style="flex-grow:1; text-decoration:none; color:var(--wine); font-weight:bold;">📁 ${child.name} (${child.children.length}) ←</a>`
-        }
-        ${childIsLeaf ? `
-          <select data-link-content="${child.id}" style="font-size:0.8rem;">
-            <option value="">-- לא מקושר --</option>
-            ${availableMasechtot.map((m) => `<option value="${m}" ${child.contentRef === m ? 'selected' : ''}>${m}</option>`).join('')}
-          </select>
-        ` : ''}
-        <button data-action="move-up" data-id="${child.id}" title="הזז למעלה">↑</button>
-        <button data-action="move-down" data-id="${child.id}" title="הזז למטה">↓</button>
-        <button data-action="rename" data-id="${child.id}" title="שנה שם">✏️</button>
-        <button data-action="delete" data-id="${child.id}" title="מחק">🗑</button>
+      <div class="spine" data-node-id="${child.id}" draggable="true"
+           style="display:flex; flex-direction:row; align-items:center; gap:0.5em; cursor:default;">
+        <span data-drag-handle title="גררו לסידור מחדש" style="cursor:grab; font-size:1.3rem; opacity:0.7;">⠿</span>
+        <div style="flex-grow:1; min-width:0;">
+          ${clickHref
+            ? `<a href="${clickHref}" style="color:inherit; text-decoration:none;"><div class="name">${isFolder ? '📁' : '📖'} ${child.name}</div></a>`
+            : `<div class="name">📄 ${child.name}</div>`}
+          <div class="progress-label">${isFolder ? `${child.children.length} תתי-סעיפים` : (child.contentRef ? `מקושר ל-${child.contentRef}` : 'קובץ תוכן - עדיין ריק')}</div>
+        </div>
+        <div style="display:flex; gap:0.3em; flex-wrap:wrap; align-items:center;">
+          ${!isFolder ? `
+            <select data-link-content="${child.id}" style="font-size:0.75rem;">
+              <option value="">-- לא מקושר --</option>
+              ${availableMasechtot.map((m) => `<option value="${m}" ${child.contentRef === m ? 'selected' : ''}>${m}</option>`).join('')}
+            </select>
+          ` : ''}
+          <button data-action="rename" data-id="${child.id}" title="שנה שם">✏️</button>
+          <button data-action="toggle-type" data-id="${child.id}" data-current-type="${childType}" title="שנה סוג (תיקייה/קובץ)">${isFolder ? '📁→📄' : '📄→📁'}</button>
+          <button data-action="import-book" data-id="${child.id}" data-name="${child.name}" title="ייבוא ספר שלם">📥</button>
+          <button data-action="delete" data-id="${child.id}" title="מחק">🗑</button>
+        </div>
       </div>`;
   }).join('');
 
   document.querySelector('.content').innerHTML = `
     <div class="breadcrumb">${breadcrumbHtml}</div>
     <h1 class="page-title">${node.id === 'root' ? 'עץ תפריטים' : node.name}</h1>
-    <p>זהו התפריט שימות המשיח משמיע בפועל כאן, לפי הסדר שמופיע למטה. כל שינוי
-       משפיע מיד על השיחה הבאה - אין צורך "לפרסם" בנפרד.
-       ${isLeaf ? ' צומת זה הוא "עלה" (אין לו עדיין תתי-סעיפים).' : ''}</p>
+    <p>זהו התפריט שימות המשיח משמיע בפועל כאן, לפי הסדר שמופיע למטה - גררו
+       כרטיס (מהאייקון ⠿) לשינוי הסדר. כל שינוי משפיע מיד על השיחה הבאה.
+       ${isLeaf ? ' אין עדיין תתי-סעיפים כאן.' : ''}</p>
 
-    <div id="childrenContainer">${childrenListHtml || '<p>אין עדיין תתי-סעיפים כאן.</p>'}</div>
+    <div id="childrenContainer" class="shelf" style="grid-template-columns: 1fr;">${childrenListHtml}</div>
 
     <div class="daf-actions">
-      <input type="text" id="newChildName" placeholder="שם תת-סעיף חדש" style="padding:0.5em;" />
-      <button class="primary" id="addChildBtn">+ הוסף תת-סעיף כאן</button>
+      <input type="text" id="newChildName" placeholder="שם כרטיס חדש" style="padding:0.5em;" />
+      <button class="primary" id="addChildBtn">+ הוסף כרטיס כאן</button>
     </div>
   `;
 
   const container = document.getElementById('childrenContainer');
+
+  // --- גרירה לסידור מחדש (HTML5 drag & drop) ---
+  let dragSrcId = null;
+  container.addEventListener('dragstart', (ev) => {
+    const card = ev.target.closest('.spine[data-node-id]');
+    if (!card) return;
+    dragSrcId = card.dataset.nodeId;
+    ev.dataTransfer.effectAllowed = 'move';
+  });
+  container.addEventListener('dragover', (ev) => {
+    ev.preventDefault();
+    const card = ev.target.closest('.spine[data-node-id]');
+    if (!card || card.dataset.nodeId === dragSrcId) return;
+    const rect = card.getBoundingClientRect();
+    const before = (ev.clientY - rect.top) < rect.height / 2;
+    card.parentNode.insertBefore(
+      container.querySelector(`[data-node-id="${dragSrcId}"]`),
+      before ? card : card.nextSibling
+    );
+  });
+  container.addEventListener('drop', async (ev) => {
+    ev.preventDefault();
+    const orderedIds = [...container.querySelectorAll('.spine[data-node-id]')].map((el) => el.dataset.nodeId);
+    try {
+      await api(`/menu-tree/node/${node.id}/reorder`, { method: 'POST', body: JSON.stringify({ orderedIds }) });
+    } catch (e) {
+      alert(e.message);
+      renderTreeEditor(nodeId);
+    }
+  });
 
   container.addEventListener('click', async (ev) => {
     const btn = ev.target.closest('button[data-action]');
@@ -713,10 +751,12 @@ async function renderTreeEditor(nodeId) {
       } else if (action === 'delete') {
         if (!confirm('למחוק את הסעיף הזה וכל תתי-הסעיפים שלו?')) return;
         await api(`/menu-tree/node/${id}/delete`, { method: 'POST' });
-      } else if (action === 'move-up') {
-        await api(`/menu-tree/node/${id}/move`, { method: 'POST', body: JSON.stringify({ direction: -1 }) });
-      } else if (action === 'move-down') {
-        await api(`/menu-tree/node/${id}/move`, { method: 'POST', body: JSON.stringify({ direction: 1 }) });
+      } else if (action === 'toggle-type') {
+        const newType = btn.dataset.currentType === 'folder' ? 'file' : 'folder';
+        await api(`/menu-tree/node/${id}/set-type`, { method: 'POST', body: JSON.stringify({ type: newType }) });
+      } else if (action === 'import-book') {
+        location.hash = `#/book/${encodeURIComponent(btn.dataset.name)}`;
+        return;
       }
       renderTreeEditor(nodeId);
     } catch (e) {
@@ -747,5 +787,190 @@ async function renderTreeEditor(nodeId) {
     } catch (e) {
       alert(e.message);
     }
+  });
+}
+
+// ==================== עורך תוכן צומת גנרי (תוכן ראשי + תתי-תוכן) ====================
+
+function nodeContentTrackBlock(trackId, trackName, text, sourceUrl, isMain) {
+  return `
+    <div class="page-frame" style="margin-bottom:1.2rem;" data-track-block="${trackId}">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.6rem;">
+        <h3 style="margin:0;">${isMain ? '📖 תוכן ראשי' : '📄 ' + trackName}</h3>
+        ${!isMain ? `<button data-action="delete-sub" data-sub-id="${trackId}">🗑 מחק תת-תוכן</button>` : ''}
+      </div>
+      <label style="font-size:0.85rem; color:var(--ink-soft);">קישור מקור (אופציונלי - לתיעוד בלבד, לא נשלף אוטומטית):</label>
+      <input type="text" data-source-url="${trackId}" value="${sourceUrl || ''}" placeholder="https://..." style="width:100%; padding:0.4em; margin-bottom:0.6em;" />
+      <div class="column-toolbar" style="margin-bottom:0.5em;">
+        <button data-action="nikud" data-track="${trackId}">🔤 ניקוד (חינם)</button>
+        <button data-action="punctuate" data-track="${trackId}">✒️ פיסוק (בתשלום)</button>
+        <button data-action="check-abbrev" data-track="${trackId}">🔍 בדוק ראשי תיבות</button>
+        <label style="display:inline-block;">
+          <input type="file" data-upload-target="${trackId}" accept=".html,.htm,.txt" style="display:none;" />
+          <button type="button" data-action="trigger-upload" data-track="${trackId}">📁 העלה קובץ טקסט</button>
+        </label>
+      </div>
+      <textarea data-track-text="${trackId}" rows="8" style="width:100%; padding:0.6em; font-size:1.1rem;" placeholder="הטקסט כאן...">${text || ''}</textarea>
+      <audio data-track-audio="${trackId}" class="audio-preview" controls style="display:none; margin-top:0.5em;"></audio>
+      <div data-abbrev-area="${trackId}" style="margin-top:0.6em;"></div>
+    </div>`;
+}
+
+async function renderNodeContentEditor(nodeId) {
+  app.innerHTML = `${topbar()}<div class="content"><div class="loading">טוען...</div></div>`;
+  attachTopbarHandlers();
+
+  const [content, { tree }] = await Promise.all([
+    api(`/node-content/${nodeId}`),
+    api('/menu-tree'),
+  ]);
+  const found = findNodeWithAncestors(tree, nodeId);
+  const nodeName = found ? found.node.name : nodeId;
+  const breadcrumbHtml = found
+    ? [...found.ancestors, { id: nodeId, name: nodeName }]
+        .map((a, i, arr) => i === arr.length - 1 ? `<span>${a.name}</span>` : `<a href="#/tree/${a.id}">${a.name}</a>`)
+        .join(' ← ')
+    : nodeName;
+
+  document.querySelector('.content').innerHTML = `
+    <div class="breadcrumb">${breadcrumbHtml}</div>
+    <h1 class="page-title">${nodeName}</h1>
+
+    <div id="tracksContainer">
+      ${nodeContentTrackBlock('main', content.mainContent.name || 'תוכן ראשי', content.mainContent.text, content.mainContent.sourceUrl, true)}
+      ${content.subContents.map((s) => nodeContentTrackBlock(s.id, s.name, s.text, s.sourceUrl, false)).join('')}
+    </div>
+
+    <div class="daf-actions">
+      <input type="text" id="newSubName" placeholder="שם תת-תוכן חדש (למשל: ביאור, תרגום)" style="padding:0.5em;" />
+      <button id="addSubBtn">+ הוסף תת-תוכן</button>
+    </div>
+
+    <div class="daf-actions" style="margin-top:1rem;">
+      <button class="primary" id="buildBtn">🔊 שלח ל-TTS ובנה אודיו</button>
+      <button id="uploadBtn">☁️ העלה לימות</button>
+    </div>
+    <div class="job-status" id="nodeJobStatus"></div>
+  `;
+
+  wireNodeContentEvents(nodeId);
+}
+
+function wireNodeContentEvents(nodeId) {
+  const getTextarea = (trackId) => document.querySelector(`textarea[data-track-text="${trackId}"]`);
+  const jobStatusEl = document.getElementById('nodeJobStatus');
+
+  document.getElementById('tracksContainer').addEventListener('click', async (ev) => {
+    const btn = ev.target.closest('button[data-action]');
+    if (!btn) return;
+    const { action } = btn.dataset;
+    const trackId = btn.dataset.track || btn.dataset.subId;
+
+    if (action === 'trigger-upload') {
+      const fileInput = document.querySelector(`input[data-upload-target="${trackId}"]`);
+      fileInput.click();
+      return;
+    }
+
+    if (action === 'delete-sub') {
+      if (!confirm('למחוק את תת-התוכן הזה?')) return;
+      await api(`/node-content/${nodeId}/sub/${trackId}`, { method: 'DELETE' });
+      return renderNodeContentEditor(nodeId);
+    }
+
+    const ta = getTextarea(trackId);
+    const original = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = '...';
+
+    try {
+      if (action === 'nikud') {
+        const r = await api(`/node-content/${nodeId}/nikud`, { method: 'POST', body: JSON.stringify({ text: ta.value }) });
+        ta.value = r.text;
+      } else if (action === 'punctuate') {
+        const r = await api(`/node-content/${nodeId}/punctuate`, { method: 'POST', body: JSON.stringify({ text: ta.value }) });
+        ta.value = r.text;
+      } else if (action === 'check-abbrev') {
+        const results = await api(`/node-content/${nodeId}/scan-abbreviations`, { method: 'POST', body: '{}' });
+        const found = results[trackId] || [];
+        const area = document.querySelector(`[data-abbrev-area="${trackId}"]`);
+        area.innerHTML = found.length
+          ? found.map((a) => `<div style="font-size:0.85rem; color:var(--ink-soft); border-right:3px solid var(--gold); padding-right:0.5em; margin-bottom:0.3em;">...${a.contextBefore} <strong style="color:var(--wine);">${a.abbreviation}</strong> ${a.contextAfter}...</div>`).join('')
+          : '<p style="font-size:0.85rem;">לא נמצאו ראשי תיבות.</p>';
+      }
+    } catch (e) {
+      alert(e.message);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = original;
+    }
+  });
+
+  // שמירת קישור מקור בעת יציאה מהשדה
+  document.getElementById('tracksContainer').addEventListener('blur', async (ev) => {
+    const input = ev.target.closest('input[data-source-url]');
+    if (!input) return;
+    const trackId = input.dataset.sourceUrl;
+    if (trackId === 'main') {
+      await api(`/node-content/${nodeId}/main`, { method: 'POST', body: JSON.stringify({ sourceUrl: input.value }) });
+    } else {
+      await api(`/node-content/${nodeId}/sub/${trackId}`, { method: 'POST', body: JSON.stringify({ sourceUrl: input.value }) });
+    }
+  }, true);
+
+  // שמירת טקסט בעת יציאה מהשדה
+  document.getElementById('tracksContainer').addEventListener('blur', async (ev) => {
+    const ta = ev.target.closest('textarea[data-track-text]');
+    if (!ta) return;
+    const trackId = ta.dataset.trackText;
+    if (trackId === 'main') {
+      await api(`/node-content/${nodeId}/main`, { method: 'POST', body: JSON.stringify({ text: ta.value }) });
+    } else {
+      await api(`/node-content/${nodeId}/sub/${trackId}`, { method: 'POST', body: JSON.stringify({ text: ta.value }) });
+    }
+  }, true);
+
+  // העלאת קובץ לכל track
+  document.querySelectorAll('input[data-upload-target]').forEach((fileInput) => {
+    fileInput.addEventListener('change', async () => {
+      if (!fileInput.files.length) return;
+      const trackId = fileInput.dataset.uploadTarget;
+      const formData = new FormData();
+      formData.append('file', fileInput.files[0]);
+      formData.append('target', trackId);
+      try {
+        const resp = await fetch(`/admin/api/node-content/${nodeId}/upload-file`, {
+          method: 'POST', credentials: 'include', body: formData,
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.error);
+        document.querySelector(`textarea[data-track-text="${trackId}"]`).value = data.text;
+      } catch (e) {
+        alert(e.message);
+      }
+    });
+  });
+
+  document.getElementById('addSubBtn').addEventListener('click', async () => {
+    const input = document.getElementById('newSubName');
+    if (!input.value.trim()) return;
+    await api(`/node-content/${nodeId}/sub`, { method: 'POST', body: JSON.stringify({ name: input.value.trim() }) });
+    renderNodeContentEditor(nodeId);
+  });
+
+  document.getElementById('buildBtn').addEventListener('click', async () => {
+    const { jobId } = await api(`/node-content/${nodeId}/build`, { method: 'POST', body: '{}' });
+    await pollJob(jobId, jobStatusEl, () => {
+      document.querySelectorAll('audio[data-track-audio]').forEach((audioEl) => {
+        const trackId = audioEl.dataset.trackAudio;
+        audioEl.src = `/admin/api/node-content/${nodeId}/audio/${trackId}?t=${Date.now()}`;
+        audioEl.style.display = 'block';
+      });
+    });
+  });
+
+  document.getElementById('uploadBtn').addEventListener('click', async () => {
+    const { jobId } = await api(`/node-content/${nodeId}/upload`, { method: 'POST', body: '{}' });
+    await pollJob(jobId, jobStatusEl);
   });
 }

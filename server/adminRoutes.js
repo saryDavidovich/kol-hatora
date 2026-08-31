@@ -28,6 +28,7 @@ const { addPunctuation } = require('../pipeline/punctuation');
 const { buildTrackAudio } = require('../pipeline/buildAudio');
 const { listHebrewVoices, synthesizeToFile } = require('../pipeline/ttsProvider');
 const settings = require('./settings');
+const menuTree = require('./menuTree');
 const { uploadAmud } = require('../pipeline/uploadToYemot');
 const MASECHTOT_DAPIM = require('../pipeline/masechtotDapim');
 
@@ -251,7 +252,7 @@ router.post('/daf/:masechet/:daf/:amud/upload', async (req, res) => {
     const extIniContent = (await fs.readFile(templatePath, 'utf-8'))
       .replace('https://YOUR-SERVER-DOMAIN.example.com/api/player/control', apiPlayerUrl);
 
-    const remoteFolder = `/20/${masechet}/${dafPadded}/${amud}`;
+    const remoteFolder = await menuTree.getMasechetYemotFolder(masechet, daf, amud);
     progress(30, `מעלה קבצים ל-${remoteFolder}...`);
     await uploadAmud({ localDir, remoteFolder, extIniContent });
     progress(100, 'הועלה בהצלחה');

@@ -69,4 +69,24 @@ router.post('/node/:id/link-content', async (req, res) => {
   }
 });
 
+router.post('/node/:id/set-type', async (req, res) => {
+  try {
+    const { type } = req.body; // 'folder' | 'file'
+    const node = await menuTree.setNodeType(req.params.id, type);
+    res.json(node);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+router.post('/node/:parentId/reorder', async (req, res) => {
+  try {
+    const { orderedIds } = req.body;
+    const children = await menuTree.reorderChildren(req.params.parentId, orderedIds);
+    res.json({ children });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
 module.exports = router;
