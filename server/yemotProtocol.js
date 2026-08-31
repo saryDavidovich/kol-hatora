@@ -19,8 +19,9 @@
 //     בבקשה הבאה, כדי לבנות תפריט מדורג (נושא -> ספר -> דף -> עמוד)
 
 /** בריחה מתווים בעייתיים בטקסט TTS (נקודה וקו מפריד אסורים לפי התיעוד) */
+/** בריחה מתווים בעייתיים בטקסט TTS (נקודה, קו מפריד, גרש/גרשיים אסורים לפי התיעוד) */
 function escapeTtsText(text) {
-  return String(text).replace(/[.\-]/g, ' ');
+  return String(text).replace(/[.\-"'\u05F3\u05F4]/g, ' ').replace(/\s{2,}/g, ' ').trim();
 }
 
 function textItem(text) {

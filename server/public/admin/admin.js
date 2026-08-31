@@ -34,9 +34,8 @@ function topbar(activeCrumbs = '') {
     <div class="topbar">
       <div class="brand">📜 ניהול תוכן · ימות הש"ס</div>
       <nav>
-        <a href="#/">דשבורד</a>
+        <a href="#/">🌳 עץ תפריטים</a>
         <a href="#/voices">⚙️ הגדרות קול</a>
-        <a href="#/tree">🌳 עץ תפריטים</a>
         <a href="#/book">📚 עריכת ספר שלם</a>
         <a href="#" id="logoutLink">התנתקות</a>
       </nav>
@@ -55,7 +54,7 @@ async function render() {
     return renderLogin();
   }
 
-  if (hash === '#/' || hash === '') return renderDashboard();
+  if (hash === '#/' || hash === '') return renderTreeEditor('root');
   if (hash === '#/voices') return renderVoiceSettings();
   if (hash === '#/book') return renderBookPicker();
   if (hash === '#/tree') return renderTreeEditor('root');
@@ -70,7 +69,7 @@ async function render() {
   const dafMatch = hash.match(/^#\/daf\/([^/]+)\/(\d+)\/([ab])$/);
   if (dafMatch) return renderDafEditor(decodeURIComponent(dafMatch[1]), parseInt(dafMatch[2], 10), dafMatch[3]);
 
-  return renderDashboard();
+  return renderTreeEditor('root');
 }
 
 window.addEventListener('hashchange', render);
@@ -667,7 +666,9 @@ async function renderTreeEditor(nodeId) {
       <div style="display:flex; align-items:center; gap:0.5em; flex-wrap:wrap; background:#fffdf7; border:1px solid var(--rule); border-radius:6px; padding:0.6em 0.8em; margin-bottom:0.5em;">
         <span style="font-family:var(--font-display); font-weight:bold; color:var(--ink-soft); min-width:2em;">${i + 1}.</span>
         ${childIsLeaf
-          ? `<span style="flex-grow:1;">${child.name}${child.contentRef ? ' <span style="color:var(--sage); font-size:0.85rem;">✓ מקושר ל-' + child.contentRef + '</span>' : ''}</span>`
+          ? (child.contentRef
+              ? `<a href="#/masechet/${encodeURIComponent(child.contentRef)}" style="flex-grow:1; text-decoration:none; color:var(--sage); font-weight:bold;">📖 ${child.name}</a>`
+              : `<span style="flex-grow:1;">${child.name}</span>`)
           : `<a href="#/tree/${child.id}" style="flex-grow:1; text-decoration:none; color:var(--wine); font-weight:bold;">📁 ${child.name} (${child.children.length}) ←</a>`
         }
         ${childIsLeaf ? `
