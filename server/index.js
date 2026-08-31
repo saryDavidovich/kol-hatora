@@ -17,6 +17,7 @@ const path = require('path');
 const fs = require('fs-extra');
 const cookieParser = require('cookie-parser');
 const contentIndex = require('./contentIndex');
+const menuTree = require('./menuTree');
 const db = require('./db');
 const proto = require('./yemotProtocol');
 const playerRoutes = require('./playerApi');
@@ -60,6 +61,7 @@ app.use('/api/player', playerRoutes);
 app.post('/admin/api/login', express.json(), adminAuth.handleLogin);
 app.post('/admin/api/logout', adminAuth.handleLogout);
 app.use('/admin/api/book', adminAuth.requireAdminAuth, require('./bookRoutes'));
+app.use('/admin/api/menu-tree', adminAuth.requireAdminAuth, require('./menuTreeRoutes'));
 app.use('/admin/api', adminAuth.requireAdminAuth, adminRoutes);
 app.use('/admin', express.static(path.join(__dirname, 'public', 'admin')));
 
@@ -77,47 +79,63 @@ app.use((req, res, next) => {
  * הפרמטרים params.topic / params.book / params.daf / params.amud
  * מצטברים ככל שהדיאלוג מתקדם (ימות שולח בכל בקשה את כל מה שנאסף עד כה).
  */
-app.all('/api/ivr/main', (req, res) => {
+/**
+ * מסלול יחיד המטפל בכל שלבי הבחירה, בעזרת שרשור read.
+ *
+ * *** ניווט דינמי בעץ (server/menuTree.js) בעומק בלתי מוגבל *** -
+ * הפרמטרים n1, n2, n3... מצטברים ככל שהמאזין בוחר עומק נוסף בעץ
+ * (בדיוק כמו topic/book/daf/amud הצטברו קודם - ימות שולח בכל בקשה
+ * את כל מה שנאסף עד כה). ברגע שמגיעים לעלה שמקושר לתוכן קיים
+ * (node.contentRef) - ממשיכים לתוך תהליך בחירת דף/עמוד הרגיל,
+ * באמצעות params.daf/params.amud כמו קודם.
+ */
+const MAX_TREE_DEPTH = 20;
+
+app.all('/api/ivr/main', async (req, res) => {
   const params = { ...req.query, ...req.body };
   const phone = params.ApiPhone || params.Phone || 'unknown';
 
   try {
-    const { topics } = contentIndex.loadTopicsIndex();
-    if (!topics.length) {
+    const tree = await menuTree.getTree();
+
+    // הליכה בעץ לפי n1, n2, ... - עד לצומת הנוכחי שבו המאזין נמצא
+    let node = tree;
+    let level = 1;
+    for (; level <= MAX_TREE_DEPTH; level++) {
+      const key = `n${level}`;
+      if (params[key] === undefined) break;
+      const idx = parseInt(params[key], 10) - 1;
+      const child = (node.children || [])[idx];
+      if (!child) {
+        // בחירה לא תקינה - חוזרים לשאול את אותה רמה שוב
+        const menu = (node.children || []).map((c, i) => `${i + 1}. ${c.name}`).join(', ');
+        return res.send(
+          proto.read([proto.textItem(`בחירה לא תקינה. ${menu}`)], key, { maxDigits: 2 })
+        );
+      }
+      node = child;
+    }
+
+    // אם הגענו לצומת עם ילדים - מציגים תפריט ומבקשים את הרמה הבאה
+    if (!node.leaf && node.children && node.children.length) {
+      const menu = node.children.map((c, i) => `${i + 1}. ${c.name}`).join(', ');
+      const prompt = level === 1 ? `ברוכים הבאים. ${menu}` : menu;
+      return res.send(
+        proto.read([proto.textItem(prompt)], `n${level}`, { maxDigits: 2 })
+      );
+    }
+
+    // עלה בעץ - אם עדיין לא מקושר לתוכן אמיתי
+    if (!node.contentRef) {
       return res.send(proto.chain(
-        proto.idListMessage([proto.textItem('המערכת עדיין בבנייה. נסו שוב מאוחר יותר')]),
+        proto.idListMessage([proto.textItem(`${node.name} - התוכן בבנייה, בקרוב אי"ה`)]),
+        proto.goToFolder('/'),
       ));
     }
 
-    // --- שלב 1: בחירת נושא ---
-    if (!params.topic) {
-      const menu = topics.map((t, i) => `${i + 1}. ${t.name}`).join(', ');
-      return res.send(
-        proto.read([proto.textItem(`ברוכים הבאים. לבחירת נושא: ${menu}`)], 'topic', { maxDigits: 2 })
-      );
-    }
-    const topic = topics[parseInt(params.topic, 10) - 1];
-    if (!topic) {
-      return res.send(
-        proto.read([proto.textItem('בחירה לא תקינה. בחרו נושא שוב')], 'topic', { maxDigits: 2 })
-      );
-    }
+    // עלה מקושר לתוכן - ממשיכים לתהליך בחירת דף/עמוד הרגיל (בדיוק כמו קודם)
+    const masechetId = node.contentRef;
 
-    // --- שלב 2: בחירת ספר (מסכת) ---
-    if (!params.book) {
-      const menu = topic.books.map((b, i) => `${i + 1}. ${b.name}`).join(', ');
-      return res.send(
-        proto.read([proto.textItem(`בחרו ספר: ${menu}`)], 'book', { maxDigits: 2 })
-      );
-    }
-    const book = topic.books[parseInt(params.book, 10) - 1];
-    if (!book) {
-      return res.send(
-        proto.read([proto.textItem('בחירה לא תקינה. בחרו ספר שוב')], 'book', { maxDigits: 2 })
-      );
-    }
-
-    // --- שלב 3: בחירת דף ---
     if (!params.daf) {
       return res.send(
         proto.read([proto.textItem('הקישו את מספר הדף המבוקש')], 'daf', { maxDigits: 3 })
@@ -130,7 +148,6 @@ app.all('/api/ivr/main', (req, res) => {
       );
     }
 
-    // --- שלב 4: בחירת עמוד ---
     if (!params.amud) {
       return res.send(
         proto.read([proto.textItem('לעמוד א הקישו 1, לעמוד ב הקישו 2')], 'amud', { maxDigits: 1 })
@@ -138,17 +155,16 @@ app.all('/api/ivr/main', (req, res) => {
     }
     const amud = params.amud === '2' ? 'b' : 'a';
 
-    if (!contentIndex.amudExists(book.id, daf, amud)) {
+    if (!contentIndex.amudExists(masechetId, daf, amud)) {
       return res.send(proto.chain(
         proto.idListMessage([proto.textItem('העמוד המבוקש אינו קיים במערכת כרגע')]),
         proto.goToFolder('/'),
       ));
     }
 
-    // --- שלב 5: שמירת מצב + הפעלה בפועל ---
-    db.setCallState(phone, { masechet: book.id, daf, amud, track: 'gemara', speed: 1.0 });
-    const savedOffset = db.getPosition(phone, book.id, daf, amud, 'gemara');
-    const targetFolder = playfileFolderFor(book.id, daf, amud);
+    db.setCallState(phone, { masechet: masechetId, daf, amud, track: 'gemara', speed: 1.0 });
+    const savedOffset = db.getPosition(phone, masechetId, daf, amud, 'gemara');
+    const targetFolder = playfileFolderFor(masechetId, daf, amud);
 
     return res.send(
       proto.goToFolderAndPlay(targetFolder, 'gemara', savedOffset)

@@ -36,6 +36,7 @@ function topbar(activeCrumbs = '') {
       <nav>
         <a href="#/">דשבורד</a>
         <a href="#/voices">⚙️ הגדרות קול</a>
+        <a href="#/tree">🌳 עץ תפריטים</a>
         <a href="#/book">📚 עריכת ספר שלם</a>
         <a href="#" id="logoutLink">התנתקות</a>
       </nav>
@@ -57,6 +58,7 @@ async function render() {
   if (hash === '#/' || hash === '') return renderDashboard();
   if (hash === '#/voices') return renderVoiceSettings();
   if (hash === '#/book') return renderBookPicker();
+  if (hash === '#/tree') return renderTreeEditor();
   const bookMatch = hash.match(/^#\/book\/([^/]+)$/);
   if (bookMatch) return renderBookEditor(decodeURIComponent(bookMatch[1]));
 
@@ -626,4 +628,102 @@ async function renderBookEditor(masechet) {
 
   // אם כבר נסרקו ראשי תיבות בעבר - מציגים אותם מיד
   renderAbbrevCards(document.getElementById('abbrevList'), masechet, 'book').catch(() => {});
+}
+
+// ==================== עורך עץ תפריטים ====================
+let treeMasechtotList = [];
+
+function renderTreeNode(node, numberPrefix, depth, availableMasechtot) {
+  const isRoot = node.id === 'root';
+  const isLeaf = !node.children || node.children.length === 0;
+
+  const linkSelect = isLeaf ? `
+    <select data-link-content="${node.id}" style="font-size:0.8rem; margin-inline-start:0.5em;">
+      <option value="">-- לא מקושר לתוכן --</option>
+      ${availableMasechtot.map((m) => `<option value="${m}" ${node.contentRef === m ? 'selected' : ''}>${m}</option>`).join('')}
+    </select>
+    ${node.contentRef ? `<span style="color:var(--sage); font-size:0.8rem;">✓ מקושר</span>` : ''}
+  ` : '';
+
+  const childrenHtml = (node.children || [])
+    .map((child, i) => renderTreeNode(child, `${numberPrefix}${i + 1}.`, depth + 1, availableMasechtot))
+    .join('');
+
+  return `
+    <div class="tree-node" style="margin-right:${depth * 1.5}rem; margin-bottom:0.4rem;">
+      <div style="display:flex; align-items:center; gap:0.4em; flex-wrap:wrap; background:#fffdf7; border:1px solid var(--rule); border-radius:6px; padding:0.4em 0.6em;">
+        <span style="font-family:var(--font-display); font-weight:bold; min-width:2.5em; color:var(--ink-soft);">${numberPrefix}</span>
+        <span style="flex-grow:1;">${node.name}</span>
+        ${linkSelect}
+        ${!isRoot ? `
+          <button data-action="move-up" data-id="${node.id}" title="הזז למעלה">↑</button>
+          <button data-action="move-down" data-id="${node.id}" title="הזז למטה">↓</button>
+          <button data-action="rename" data-id="${node.id}" title="שנה שם">✏️</button>
+        ` : ''}
+        <button data-action="add-child" data-id="${node.id}" title="הוסף תת-סעיף">+ הוסף</button>
+        ${!isRoot ? `<button data-action="delete" data-id="${node.id}" title="מחק">🗑</button>` : ''}
+      </div>
+      <div>${childrenHtml}</div>
+    </div>`;
+}
+
+async function renderTreeEditor() {
+  app.innerHTML = `${topbar()}<div class="content"><div class="loading">טוען עץ...</div></div>`;
+  attachTopbarHandlers();
+
+  const { tree, availableMasechtot } = await api('/menu-tree');
+  treeMasechtotList = availableMasechtot;
+
+  document.querySelector('.content').innerHTML = `
+    <h1 class="page-title">🌳 עץ תפריטים</h1>
+    <p>זהו התפריט שימות המשיח משמיע בפועל, לפי הסדר שמופיע כאן. כל שינוי
+       (הוספה, שינוי שם, הזזה, מחיקה, קישור תוכן) משפיע מיד על השיחה הבאה -
+       אין צורך "לפרסם" בנפרד.</p>
+    <div id="treeContainer"></div>
+  `;
+
+  const container = document.getElementById('treeContainer');
+  container.innerHTML = renderTreeNode(tree, '', 0, availableMasechtot);
+
+  container.addEventListener('click', async (ev) => {
+    const btn = ev.target.closest('button[data-action]');
+    if (!btn) return;
+    const { action, id } = btn.dataset;
+
+    try {
+      if (action === 'add-child') {
+        const name = prompt('שם הסעיף החדש:');
+        if (!name) return;
+        await api(`/menu-tree/node/${id}/add`, { method: 'POST', body: JSON.stringify({ name }) });
+      } else if (action === 'rename') {
+        const newName = prompt('שם חדש:');
+        if (!newName) return;
+        await api(`/menu-tree/node/${id}/rename`, { method: 'POST', body: JSON.stringify({ name: newName }) });
+      } else if (action === 'delete') {
+        if (!confirm('למחוק את הסעיף הזה וכל תתי-הסעיפים שלו?')) return;
+        await api(`/menu-tree/node/${id}/delete`, { method: 'POST' });
+      } else if (action === 'move-up') {
+        await api(`/menu-tree/node/${id}/move`, { method: 'POST', body: JSON.stringify({ direction: -1 }) });
+      } else if (action === 'move-down') {
+        await api(`/menu-tree/node/${id}/move`, { method: 'POST', body: JSON.stringify({ direction: 1 }) });
+      }
+      renderTreeEditor(); // רענון מלא - הכי פשוט ואמין אחרי כל שינוי מבני
+    } catch (e) {
+      alert(e.message);
+    }
+  });
+
+  container.addEventListener('change', async (ev) => {
+    const select = ev.target.closest('select[data-link-content]');
+    if (!select) return;
+    const id = select.dataset.linkContent;
+    try {
+      await api(`/menu-tree/node/${id}/link-content`, {
+        method: 'POST', body: JSON.stringify({ contentRef: select.value || null }),
+      });
+      renderTreeEditor();
+    } catch (e) {
+      alert(e.message);
+    }
+  });
 }
