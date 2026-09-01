@@ -84,7 +84,8 @@ function migrateMasechtotIntoTree(tree) {
 
   for (const masechet of Object.keys(MASECHTOT_DAPIM)) {
     if (linkedRefs.has(masechet)) continue;
-    if (!contentIndex.amudExists(masechet, 2, 'a')) continue; // רק אם באמת נבנה תוכן
+    const range = MASECHTOT_DAPIM[masechet];
+    if (!contentIndex.amudExists(masechet, range.start, 'a')) continue; // רק אם באמת נבנה תוכן
     gemaraNode.children.push({
       id: makeId(), name: masechet, children: [], leaf: true, contentRef: masechet,
     });

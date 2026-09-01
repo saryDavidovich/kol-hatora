@@ -87,18 +87,18 @@ async function main() {
   const log = { done: [], skipped: [], failed: [], startedAt: new Date().toISOString() };
 
   if (arg1 === 'all') {
-    for (const [masechet, maxDaf] of Object.entries(MASECHTOT_DAPIM)) {
-      await runMasechet(masechet, 2, maxDaf, log);
+    for (const [masechet, range] of Object.entries(MASECHTOT_DAPIM)) {
+      await runMasechet(masechet, range.start, range.end, log);
     }
   } else {
     const masechet = arg1;
-    const maxDaf = MASECHTOT_DAPIM[masechet];
-    if (!maxDaf && !(arg2 && arg3)) {
+    const range = MASECHTOT_DAPIM[masechet];
+    if (!range && !(arg2 && arg3)) {
       console.error(`מסכת "${masechet}" לא מוכרת בטבלת masechtotDapim.js - יש להוסיף אותה, או לציין טווח דפים ידנית`);
       process.exit(1);
     }
-    const fromDaf = arg2 ? parseInt(arg2, 10) : 2;
-    const toDaf = arg3 ? parseInt(arg3, 10) : maxDaf;
+    const fromDaf = arg2 ? parseInt(arg2, 10) : range.start;
+    const toDaf = arg3 ? parseInt(arg3, 10) : range.end;
     await runMasechet(masechet, fromDaf, toDaf, log);
   }
 

@@ -42,14 +42,14 @@ router.use(express.json({ limit: '2mb' }));
 // --- 1. דשבורד ---
 router.get('/overview', async (req, res) => {
   const result = [];
-  for (const [masechet, maxDaf] of Object.entries(MASECHTOT_DAPIM)) {
+  for (const [masechet, range] of Object.entries(MASECHTOT_DAPIM)) {
     let builtCount = 0;
-    for (let daf = 2; daf <= maxDaf; daf++) {
+    for (let daf = range.start; daf <= range.end; daf++) {
       for (const amud of ['a', 'b']) {
         if (contentIndex.amudExists(masechet, daf, amud)) builtCount++;
       }
     }
-    const totalAmudim = (maxDaf - 1) * 2;
+    const totalAmudim = (range.end - range.start + 1) * 2;
     result.push({ masechet, totalAmudim, builtCount });
   }
   res.json({ masechtot: result });
@@ -58,11 +58,11 @@ router.get('/overview', async (req, res) => {
 // --- 2. כל הדפים במסכת + סטטוס ---
 router.get('/masechet/:masechet', async (req, res) => {
   const { masechet } = req.params;
-  const maxDaf = MASECHTOT_DAPIM[masechet];
-  if (!maxDaf) return res.status(404).json({ error: `מסכת "${masechet}" לא מוכרת` });
+  const range = MASECHTOT_DAPIM[masechet];
+  if (!range) return res.status(404).json({ error: `מסכת "${masechet}" לא מוכרת` });
 
   const dapim = [];
-  for (let daf = 2; daf <= maxDaf; daf++) {
+  for (let daf = range.start; daf <= range.end; daf++) {
     for (const amud of ['a', 'b']) {
       const draft = await drafts.getDraft(masechet, daf, amud);
       const built = contentIndex.amudExists(masechet, daf, amud);
