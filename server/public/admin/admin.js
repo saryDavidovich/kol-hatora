@@ -286,6 +286,77 @@ function wireDafEditorEvents(masechet, daf, amud) {
   const getTextarea = (track) => document.querySelector(`textarea[data-track="${track}"]`);
   const jobStatusEl = document.getElementById('jobStatus');
 
+  // מצב הסריקה הנוכחית - נשמר בזיכרון בין הסריקה לעדכון הסופי
+  let abbrevState = null; // { gemara: {originalText, items: [...]}, rashi: {...}, tosafot: {...} }
+
+  function renderAbbrevArea() {
+    const area = document.getElementById('dafAbbrevArea');
+    const trackLabels = { gemara: 'גמרא', rashi: 'רש"י', tosafot: 'תוספות' };
+    let anyFound = false;
+
+    const html = ['gemara', 'rashi', 'tosafot'].map((track) => {
+      const items = abbrevState[track].items;
+      if (!items.length) return '';
+      anyFound = true;
+      const rows = items.map((item, i) => `
+        <div style="display:flex; align-items:center; gap:0.5em; flex-wrap:wrap; background:${item.approved ? '#eef5ee' : '#fffdf7'}; border:1px solid var(--rule); border-radius:6px; padding:0.5em 0.7em; margin-bottom:0.4em;">
+          <div style="flex-grow:1; min-width:200px; font-size:0.85rem; color:var(--ink-soft);">
+            ...${item.contextBefore} <strong style="color:var(--wine);">${item.abbreviation}</strong> ${item.contextAfter}...
+          </div>
+          <input type="text" data-abbrev-input data-track="${track}" data-idx="${i}" value="${item.expansion}"
+                 ${item.approved ? 'disabled' : ''} style="width:180px; padding:0.4em;" />
+          ${item.approved
+            ? `<button data-action="edit-again" data-track="${track}" data-idx="${i}">✏️ ערוך מחדש</button> <span style="color:var(--sage);">✓ אושר</span>`
+            : `<button data-action="approve" data-track="${track}" data-idx="${i}">✓ אישור</button>`}
+        </div>`).join('');
+      return `<div style="margin-bottom:1em;"><strong>${trackLabels[track]}:</strong>${rows}</div>`;
+    }).join('');
+
+    if (!anyFound) {
+      area.innerHTML = '<p>לא נמצאו ראשי תיבות.</p>';
+      return;
+    }
+
+    area.innerHTML = html + `
+      <button class="primary" id="applyAbbrevBtn">✅ עדכן הכל (החל את כל האישורים על הטקסט)</button>
+      <span id="applyAbbrevStatus" style="margin-inline-start:0.6em; font-size:0.85rem;"></span>
+    `;
+
+    area.querySelectorAll('[data-action="approve"]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const { track, idx } = btn.dataset;
+        const input = area.querySelector(`input[data-abbrev-input][data-track="${track}"][data-idx="${idx}"]`);
+        abbrevState[track].items[idx].expansion = input.value;
+        abbrevState[track].items[idx].approved = true;
+        renderAbbrevArea();
+      });
+    });
+    area.querySelectorAll('[data-action="edit-again"]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const { track, idx } = btn.dataset;
+        abbrevState[track].items[idx].approved = false;
+        renderAbbrevArea();
+      });
+    });
+
+    document.getElementById('applyAbbrevBtn').addEventListener('click', () => {
+      const statusEl = document.getElementById('applyAbbrevStatus');
+      let appliedCount = 0;
+      for (const track of ['gemara', 'rashi', 'tosafot']) {
+        const { originalText, items } = abbrevState[track];
+        const approvedSorted = items.filter((it) => it.approved).sort((a, b) => b.charIndex - a.charIndex);
+        if (!approvedSorted.length) continue;
+        let text = originalText;
+        for (const it of approvedSorted) {
+          text = text.slice(0, it.charIndex) + it.expansion + text.slice(it.charEndIndex);
+          appliedCount++;
+        }
+        getTextarea(track).value = text;
+      }
+      statusEl.textContent = appliedCount ? `הוחלו ${appliedCount} תיקונים - זכרו לשמור טיוטה!` : 'לא אושרו תיקונים';
+    });
+  }
+
   document.getElementById('checkAbbrevBtn').addEventListener('click', async () => {
     const texts = { gemara: getTextarea('gemara').value, rashi: getTextarea('rashi').value, tosafot: getTextarea('tosafot').value };
     const area = document.getElementById('dafAbbrevArea');
@@ -294,10 +365,14 @@ function wireDafEditorEvents(masechet, daf, amud) {
       const results = await api(`/daf/${encodeURIComponent(masechet)}/${daf}/${amud}/check-abbreviations`, {
         method: 'POST', body: JSON.stringify(texts),
       });
-      const allFound = [...results.gemara, ...results.rashi, ...results.tosafot];
-      area.innerHTML = allFound.length
-        ? allFound.map((a) => `<div style="font-size:0.85rem; color:var(--ink-soft); border-right:3px solid var(--gold); padding-right:0.5em; margin-bottom:0.3em;">...${a.contextBefore} <strong style="color:var(--wine);">${a.abbreviation}</strong> ${a.contextAfter}...</div>`).join('')
-        : '<p>לא נמצאו ראשי תיבות.</p>';
+      abbrevState = {};
+      for (const track of ['gemara', 'rashi', 'tosafot']) {
+        abbrevState[track] = {
+          originalText: texts[track],
+          items: results[track].map((a) => ({ ...a, expansion: a.abbreviation, approved: false })),
+        };
+      }
+      renderAbbrevArea();
     } catch (e) {
       area.innerHTML = `<p class="column-error">שגיאה: ${e.message}</p>`;
     }
