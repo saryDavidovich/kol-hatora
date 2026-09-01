@@ -89,4 +89,13 @@ router.post('/node/:parentId/reorder', async (req, res) => {
   }
 });
 
+router.post('/apply-shas-structure', async (req, res) => {
+  try {
+    const result = await menuTree.applyShasStructure();
+    res.json(result);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
 module.exports = router;

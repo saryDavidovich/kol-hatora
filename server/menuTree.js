@@ -270,7 +270,58 @@ function findNodeByYemotPath(tree, pathNumbers) {
   return current;
 }
 
+/**
+ * שדרוג חד-פעמי: מארגן מחדש את "משנה וגמרא" ממבנה שטוח למבנה
+ * סדרים→מסכתות (6 סדרים, 38 מסכתות, בסדר קבוע - ראה pipeline/shasStructure.js).
+ * שומר על כל מסכת קיימת עם ה-id וה-contentRef שלה (רק מזיז אותה לתוך
+ * תיקיית הסדר המתאימה) - לא מוחק ולא בונה מחדש מסכתות שכבר קיימות.
+ * בטוח להרצה חוזרת (idempotent) - אם כבר במבנה סדרים, לא עושה כלום.
+ */
+async function applyShasStructure() {
+  const SHAS_STRUCTURE = require('../pipeline/shasStructure');
+  const tree = await getTree();
+  const gemaraFound = findNode(tree, tree.children.find((c) => c.name === 'משנה וגמרא')?.id);
+  if (!gemaraFound) throw new Error('לא נמצא צומת "משנה וגמרא" בעץ');
+  const gemaraNode = gemaraFound.node;
+
+  // אם כבר יש כאן בדיוק את 6 הסדרים - כבר מעודכן, לא עושים כלום
+  const sedarim = Object.keys(SHAS_STRUCTURE);
+  const alreadyDone = gemaraNode.children.length === sedarim.length
+    && gemaraNode.children.every((c) => sedarim.includes(c.name));
+  if (alreadyDone) return { changed: false, message: 'העץ כבר במבנה סדרים - לא נדרש שינוי' };
+
+  // אוספים את כל מה שכבר קיים היום ישירות תחת "משנה וגמרא" (מבנה שטוח ישן)
+  const existingFlat = {};
+  gemaraNode.children.forEach((c) => { existingFlat[c.name] = c; });
+
+  const newChildren = [];
+  for (const seder of sedarim) {
+    const sederNode = { id: makeId(), name: seder, children: [], leaf: false, contentRef: null, type: 'folder' };
+    for (const masechet of SHAS_STRUCTURE[seder]) {
+      if (existingFlat[masechet]) {
+        sederNode.children.push(existingFlat[masechet]); // שימור id/contentRef
+        delete existingFlat[masechet];
+      } else {
+        sederNode.children.push({ id: makeId(), name: masechet, children: [], leaf: true, contentRef: null });
+      }
+    }
+    newChildren.push(sederNode);
+  }
+
+  const leftover = Object.values(existingFlat); // מסכתות שהיו קיימות אבל לא ברשימת ה-38 (לא אמור לקרות)
+  gemaraNode.children = [...newChildren, ...leftover];
+  gemaraNode.leaf = false;
+
+  await saveTree(tree);
+  return {
+    changed: true,
+    message: `העץ שודרג למבנה סדרים (${sedarim.length} סדרים, ${sedarim.reduce((n, s) => n + SHAS_STRUCTURE[s].length, 0)} מסכתות)`,
+    leftoverCount: leftover.length,
+  };
+}
+
 module.exports = {
   getTree, saveTree, findNode, findNodeByPath, addNode, renameNode, deleteNode, moveNode, setContentRef,
   getYemotPath, findNodeByContentRef, getMasechetYemotFolder, setNodeType, reorderChildren, findNodeByYemotPath,
+  applyShasStructure,
 };

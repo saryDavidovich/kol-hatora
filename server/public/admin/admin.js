@@ -702,6 +702,13 @@ async function renderTreeEditor(nodeId) {
        כרטיס (מהאייקון ⠿) לשינוי הסדר. כל שינוי משפיע מיד על השיחה הבאה.
        ${isLeaf ? ' אין עדיין תתי-סעיפים כאן.' : ''}</p>
 
+    ${node.id === 'root' ? `
+      <div class="page-frame" style="margin-bottom:1rem;">
+        <button id="applyShasStructureBtn">🔄 שדרג את "משנה וגמרא" למבנה 6 הסדרים (חד-פעמי)</button>
+        <div id="shasStructureStatus" style="margin-top:0.5em; font-size:0.85rem;"></div>
+      </div>
+    ` : ''}
+
     <div id="childrenContainer" class="shelf" style="grid-template-columns: 1fr;">${childrenListHtml}</div>
 
     <div class="daf-actions">
@@ -709,6 +716,20 @@ async function renderTreeEditor(nodeId) {
       <button class="primary" id="addChildBtn">+ הוסף כרטיס כאן</button>
     </div>
   `;
+
+  if (node.id === 'root') {
+    document.getElementById('applyShasStructureBtn').addEventListener('click', async () => {
+      const statusEl = document.getElementById('shasStructureStatus');
+      statusEl.textContent = 'משדרג...';
+      try {
+        const result = await api('/menu-tree/apply-shas-structure', { method: 'POST', body: '{}' });
+        statusEl.textContent = result.message;
+        if (result.changed) renderTreeEditor(nodeId);
+      } catch (e) {
+        statusEl.textContent = `שגיאה: ${e.message}`;
+      }
+    });
+  }
 
   const container = document.getElementById('childrenContainer');
 
