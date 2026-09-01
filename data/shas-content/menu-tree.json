@@ -1,0 +1,937 @@
+{
+  "id": "root",
+  "name": "שורש",
+  "children": [
+    {
+      "id": "457235c98e",
+      "name": "תנ\"ך",
+      "children": [
+        {
+          "id": "071f2526d1",
+          "name": "תורה",
+          "children": [
+            {
+              "id": "fe37af1fcd",
+              "name": "בראשית",
+              "children": [
+                {
+                  "id": "7f3566a771",
+                  "name": "בראשית",
+                  "children": [],
+                  "leaf": true,
+                  "contentRef": null
+                },
+                {
+                  "id": "3ffdad6a69",
+                  "name": "נח",
+                  "children": [],
+                  "leaf": true,
+                  "contentRef": null
+                },
+                {
+                  "id": "412f280847",
+                  "name": "לך לך",
+                  "children": [],
+                  "leaf": true,
+                  "contentRef": null
+                },
+                {
+                  "id": "5f83239470",
+                  "name": "וירא",
+                  "children": [],
+                  "leaf": true,
+                  "contentRef": null
+                },
+                {
+                  "id": "0b809ae194",
+                  "name": "חיי שרה",
+                  "children": [],
+                  "leaf": true,
+                  "contentRef": null
+                },
+                {
+                  "id": "905f8ba062",
+                  "name": "תולדות",
+                  "children": [],
+                  "leaf": true,
+                  "contentRef": null
+                },
+                {
+                  "id": "f369845e32",
+                  "name": "ויצא",
+                  "children": [],
+                  "leaf": true,
+                  "contentRef": null
+                },
+                {
+                  "id": "535f35ab4c",
+                  "name": "וישלח",
+                  "children": [],
+                  "leaf": true,
+                  "contentRef": null
+                },
+                {
+                  "id": "1b0dc3327c",
+                  "name": "וישב",
+                  "children": [],
+                  "leaf": true,
+                  "contentRef": null
+                },
+                {
+                  "id": "0b1cf68d1e",
+                  "name": "מקץ",
+                  "children": [],
+                  "leaf": true,
+                  "contentRef": null
+                },
+                {
+                  "id": "eb8737dcd0",
+                  "name": "ויגש",
+                  "children": [],
+                  "leaf": true,
+                  "contentRef": null
+                },
+                {
+                  "id": "a1ba79107a",
+                  "name": "ויחי",
+                  "children": [],
+                  "leaf": true,
+                  "contentRef": null
+                }
+              ],
+              "leaf": false,
+              "contentRef": null
+            },
+            {
+              "id": "e3a0b623ff",
+              "name": "שמות",
+              "children": [
+                {
+                  "id": "29e41ced78",
+                  "name": "שמות",
+                  "children": [],
+                  "leaf": true,
+                  "contentRef": null
+                },
+                {
+                  "id": "9997074398",
+                  "name": "וארא",
+                  "children": [],
+                  "leaf": true,
+                  "contentRef": null
+                },
+                {
+                  "id": "e14077b783",
+                  "name": "בא",
+                  "children": [],
+                  "leaf": true,
+                  "contentRef": null
+                },
+                {
+                  "id": "c7ed7fd88c",
+                  "name": "בשלח",
+                  "children": [],
+                  "leaf": true,
+                  "contentRef": null
+                },
+                {
+                  "id": "1613276852",
+                  "name": "יתרו",
+                  "children": [],
+                  "leaf": true,
+                  "contentRef": null
+                },
+                {
+                  "id": "3bc16cc043",
+                  "name": "משפטים",
+                  "children": [],
+                  "leaf": true,
+                  "contentRef": null
+                },
+                {
+                  "id": "e491ee0454",
+                  "name": "תרומה",
+                  "children": [],
+                  "leaf": true,
+                  "contentRef": null
+                },
+                {
+                  "id": "12d2d895d6",
+                  "name": "תצוה",
+                  "children": [],
+                  "leaf": true,
+                  "contentRef": null
+                },
+                {
+                  "id": "0a01a50c4c",
+                  "name": "כי תשא",
+                  "children": [],
+                  "leaf": true,
+                  "contentRef": null
+                },
+                {
+                  "id": "b9fa40433b",
+                  "name": "ויקהל",
+                  "children": [],
+                  "leaf": true,
+                  "contentRef": null
+                },
+                {
+                  "id": "49386ffbf0",
+                  "name": "פקודי",
+                  "children": [],
+                  "leaf": true,
+                  "contentRef": null
+                }
+              ],
+              "leaf": false,
+              "contentRef": null
+            },
+            {
+              "id": "96d1319b81",
+              "name": "ויקרא",
+              "children": [
+                {
+                  "id": "ad97971230",
+                  "name": "ויקרא",
+                  "children": [],
+                  "leaf": true,
+                  "contentRef": null
+                },
+                {
+                  "id": "86d5173f14",
+                  "name": "צו",
+                  "children": [],
+                  "leaf": true,
+                  "contentRef": null
+                },
+                {
+                  "id": "7745a39ced",
+                  "name": "שמיני",
+                  "children": [],
+                  "leaf": true,
+                  "contentRef": null
+                },
+                {
+                  "id": "d7bf968b18",
+                  "name": "תזריע",
+                  "children": [],
+                  "leaf": true,
+                  "contentRef": null
+                },
+                {
+                  "id": "0abf06301a",
+                  "name": "מצורע",
+                  "children": [],
+                  "leaf": true,
+                  "contentRef": null
+                },
+                {
+                  "id": "c66ad2bacb",
+                  "name": "אחרי מות",
+                  "children": [],
+                  "leaf": true,
+                  "contentRef": null
+                },
+                {
+                  "id": "94db4f2ef0",
+                  "name": "קדושים",
+                  "children": [],
+                  "leaf": true,
+                  "contentRef": null
+                },
+                {
+                  "id": "9fe7041f7a",
+                  "name": "אמור",
+                  "children": [],
+                  "leaf": true,
+                  "contentRef": null
+                },
+                {
+                  "id": "b14ed31179",
+                  "name": "בהר",
+                  "children": [],
+                  "leaf": true,
+                  "contentRef": null
+                },
+                {
+                  "id": "a79bddac93",
+                  "name": "בחוקותי",
+                  "children": [],
+                  "leaf": true,
+                  "contentRef": null
+                }
+              ],
+              "leaf": false,
+              "contentRef": null
+            },
+            {
+              "id": "b7876df89a",
+              "name": "במדבר",
+              "children": [
+                {
+                  "id": "1bf4d35222",
+                  "name": "במדבר",
+                  "children": [],
+                  "leaf": true,
+                  "contentRef": null
+                },
+                {
+                  "id": "b4ab8defaa",
+                  "name": "נשא",
+                  "children": [],
+                  "leaf": true,
+                  "contentRef": null
+                },
+                {
+                  "id": "56b8418560",
+                  "name": "בהעלותך",
+                  "children": [],
+                  "leaf": true,
+                  "contentRef": null
+                },
+                {
+                  "id": "00228340ad",
+                  "name": "שלח",
+                  "children": [],
+                  "leaf": true,
+                  "contentRef": null
+                },
+                {
+                  "id": "f5ff57b553",
+                  "name": "קורח",
+                  "children": [],
+                  "leaf": true,
+                  "contentRef": null
+                },
+                {
+                  "id": "34b8346423",
+                  "name": "חוקת",
+                  "children": [],
+                  "leaf": true,
+                  "contentRef": null
+                },
+                {
+                  "id": "4b0f17ad77",
+                  "name": "בלק",
+                  "children": [],
+                  "leaf": true,
+                  "contentRef": null
+                },
+                {
+                  "id": "ff935ef686",
+                  "name": "פנחס",
+                  "children": [],
+                  "leaf": true,
+                  "contentRef": null
+                },
+                {
+                  "id": "92976a54e1",
+                  "name": "מטות",
+                  "children": [],
+                  "leaf": true,
+                  "contentRef": null
+                },
+                {
+                  "id": "e64041b92b",
+                  "name": "מסעי",
+                  "children": [],
+                  "leaf": true,
+                  "contentRef": null
+                }
+              ],
+              "leaf": false,
+              "contentRef": null
+            },
+            {
+              "id": "5ba177c047",
+              "name": "דברים",
+              "children": [
+                {
+                  "id": "8b6f5a12c4",
+                  "name": "דברים",
+                  "children": [],
+                  "leaf": true,
+                  "contentRef": null
+                },
+                {
+                  "id": "5a838e92f9",
+                  "name": "ואתחנן",
+                  "children": [],
+                  "leaf": true,
+                  "contentRef": null
+                },
+                {
+                  "id": "83201fccde",
+                  "name": "עקב",
+                  "children": [],
+                  "leaf": true,
+                  "contentRef": null
+                },
+                {
+                  "id": "935c086496",
+                  "name": "ראה",
+                  "children": [],
+                  "leaf": true,
+                  "contentRef": null
+                },
+                {
+                  "id": "dbeb575168",
+                  "name": "שופטים",
+                  "children": [],
+                  "leaf": true,
+                  "contentRef": null
+                },
+                {
+                  "id": "e921c8041c",
+                  "name": "כי תצא",
+                  "children": [],
+                  "leaf": true,
+                  "contentRef": null
+                },
+                {
+                  "id": "3a8bef49e6",
+                  "name": "כי תבא",
+                  "children": [],
+                  "leaf": true,
+                  "contentRef": null
+                },
+                {
+                  "id": "01cf1ff2ff",
+                  "name": "נצבים",
+                  "children": [],
+                  "leaf": true,
+                  "contentRef": null
+                },
+                {
+                  "id": "03d81db117",
+                  "name": "וילך",
+                  "children": [],
+                  "leaf": true,
+                  "contentRef": null
+                },
+                {
+                  "id": "41f0da8d48",
+                  "name": "האזינו",
+                  "children": [],
+                  "leaf": true,
+                  "contentRef": null
+                },
+                {
+                  "id": "fdfc9963dd",
+                  "name": "וזאת הברכה",
+                  "children": [],
+                  "leaf": true,
+                  "contentRef": null
+                }
+              ],
+              "leaf": false,
+              "contentRef": null
+            }
+          ],
+          "leaf": false,
+          "contentRef": null
+        },
+        {
+          "id": "b04f433906",
+          "name": "נביאים",
+          "children": [
+            {
+              "id": "e793067fb2",
+              "name": "יהושע",
+              "children": [],
+              "leaf": true,
+              "contentRef": null
+            },
+            {
+              "id": "3c51105074",
+              "name": "שופטים",
+              "children": [],
+              "leaf": true,
+              "contentRef": null
+            },
+            {
+              "id": "f9e8d3c655",
+              "name": "שמואל א",
+              "children": [],
+              "leaf": true,
+              "contentRef": null
+            },
+            {
+              "id": "5b1d978311",
+              "name": "שמואל ב",
+              "children": [],
+              "leaf": true,
+              "contentRef": null
+            },
+            {
+              "id": "96c961a5cc",
+              "name": "מלכים א",
+              "children": [],
+              "leaf": true,
+              "contentRef": null
+            },
+            {
+              "id": "faa29ce550",
+              "name": "מלכים ב",
+              "children": [],
+              "leaf": true,
+              "contentRef": null
+            },
+            {
+              "id": "ab02d61374",
+              "name": "ישעיהו",
+              "children": [],
+              "leaf": true,
+              "contentRef": null
+            },
+            {
+              "id": "0507cc39c6",
+              "name": "ירמיהו",
+              "children": [],
+              "leaf": true,
+              "contentRef": null
+            },
+            {
+              "id": "cc0a620f27",
+              "name": "יחזקאל",
+              "children": [],
+              "leaf": true,
+              "contentRef": null
+            },
+            {
+              "id": "3defa79bcd",
+              "name": "עמוס",
+              "children": [],
+              "leaf": true,
+              "contentRef": null
+            },
+            {
+              "id": "0f93787f77",
+              "name": "עובדיה",
+              "children": [],
+              "leaf": true,
+              "contentRef": null
+            },
+            {
+              "id": "d6eaf9c9a5",
+              "name": "יונה",
+              "children": [],
+              "leaf": true,
+              "contentRef": null
+            },
+            {
+              "id": "2208c9b89f",
+              "name": "מיכה",
+              "children": [],
+              "leaf": true,
+              "contentRef": null
+            },
+            {
+              "id": "fa1f899ca0",
+              "name": "נחום",
+              "children": [],
+              "leaf": true,
+              "contentRef": null
+            },
+            {
+              "id": "e7958c4b0b",
+              "name": "חבקוק",
+              "children": [],
+              "leaf": true,
+              "contentRef": null
+            },
+            {
+              "id": "849637cfd8",
+              "name": "צפניה",
+              "children": [],
+              "leaf": true,
+              "contentRef": null
+            },
+            {
+              "id": "dd3a3f80d9",
+              "name": "חגי",
+              "children": [],
+              "leaf": true,
+              "contentRef": null
+            },
+            {
+              "id": "fbd1d937e4",
+              "name": "זכריה",
+              "children": [],
+              "leaf": true,
+              "contentRef": null
+            },
+            {
+              "id": "e0207fe25d",
+              "name": "מלאכי",
+              "children": [],
+              "leaf": true,
+              "contentRef": null
+            }
+          ],
+          "leaf": false,
+          "contentRef": null
+        },
+        {
+          "id": "e808641c57",
+          "name": "כתובים",
+          "children": [],
+          "leaf": true,
+          "contentRef": null
+        }
+      ],
+      "leaf": false,
+      "contentRef": null
+    },
+    {
+      "id": "8dfbd4d4e1",
+      "name": "משנה וגמרא",
+      "children": [
+        {
+          "id": "a978bbd6bd",
+          "name": "זרעים",
+          "children": [
+            {
+              "id": "cefc9a49f9",
+              "name": "ברכות",
+              "children": [],
+              "leaf": true,
+              "contentRef": null
+            }
+          ],
+          "leaf": false,
+          "contentRef": null,
+          "type": "folder"
+        },
+        {
+          "id": "fd8f957fe7",
+          "name": "מועד",
+          "children": [
+            {
+              "id": "2701841482",
+              "name": "שבת",
+              "children": [],
+              "leaf": true,
+              "contentRef": null
+            },
+            {
+              "id": "23b9f75edb",
+              "name": "עירובין",
+              "children": [],
+              "leaf": true,
+              "contentRef": null
+            },
+            {
+              "id": "579012784e",
+              "name": "פסחים",
+              "children": [],
+              "leaf": true,
+              "contentRef": null
+            },
+            {
+              "id": "31259c841f",
+              "name": "שקלים (ירושלמי)",
+              "children": [],
+              "leaf": true,
+              "contentRef": null
+            },
+            {
+              "id": "9924a902f7",
+              "name": "ראש השנה",
+              "children": [],
+              "leaf": true,
+              "contentRef": null
+            },
+            {
+              "id": "afef0dea6b",
+              "name": "יומא",
+              "children": [],
+              "leaf": true,
+              "contentRef": null
+            },
+            {
+              "id": "925f5e3aae",
+              "name": "סוכה",
+              "children": [],
+              "leaf": true,
+              "contentRef": null
+            },
+            {
+              "id": "5bdd47ccb8",
+              "name": "ביצה",
+              "children": [],
+              "leaf": true,
+              "contentRef": null
+            },
+            {
+              "id": "22e83080c4",
+              "name": "תענית",
+              "children": [],
+              "leaf": true,
+              "contentRef": null
+            },
+            {
+              "id": "8fcd6b9d92",
+              "name": "מגילה",
+              "children": [],
+              "leaf": true,
+              "contentRef": null
+            },
+            {
+              "id": "c3305ad9ef",
+              "name": "מועד קטן",
+              "children": [],
+              "leaf": true,
+              "contentRef": null
+            },
+            {
+              "id": "600c3bcd17",
+              "name": "חגיגה",
+              "children": [],
+              "leaf": true,
+              "contentRef": null
+            }
+          ],
+          "leaf": false,
+          "contentRef": null,
+          "type": "folder"
+        },
+        {
+          "id": "bd22c6e997",
+          "name": "נשים",
+          "children": [
+            {
+              "id": "eaae5cf216",
+              "name": "יבמות",
+              "children": [],
+              "leaf": true,
+              "contentRef": null
+            },
+            {
+              "id": "41f58fe82b",
+              "name": "כתובות",
+              "children": [],
+              "leaf": true,
+              "contentRef": null
+            },
+            {
+              "id": "c36dd38488",
+              "name": "גיטין",
+              "children": [],
+              "leaf": true,
+              "contentRef": null
+            },
+            {
+              "id": "36c3fe0947",
+              "name": "קידושין",
+              "children": [],
+              "leaf": true,
+              "contentRef": null
+            },
+            {
+              "id": "42421890ca",
+              "name": "נדרים",
+              "children": [],
+              "leaf": true,
+              "contentRef": null
+            },
+            {
+              "id": "a23180f2cc",
+              "name": "נזיר",
+              "children": [],
+              "leaf": true,
+              "contentRef": null
+            },
+            {
+              "id": "87600c9e75",
+              "name": "סוטה",
+              "children": [],
+              "leaf": true,
+              "contentRef": null
+            }
+          ],
+          "leaf": false,
+          "contentRef": null,
+          "type": "folder"
+        },
+        {
+          "id": "2640ac0a4b",
+          "name": "נזיקין",
+          "children": [
+            {
+              "id": "7c30bdebbf",
+              "name": "בבא קמא",
+              "children": [],
+              "leaf": true,
+              "contentRef": null
+            },
+            {
+              "id": "24ce6cdd68",
+              "name": "בבא מציעא",
+              "children": [],
+              "leaf": true,
+              "contentRef": null
+            },
+            {
+              "id": "a5e403897c",
+              "name": "בבא בתרא",
+              "children": [],
+              "leaf": true,
+              "contentRef": null
+            },
+            {
+              "id": "2fe71845d4",
+              "name": "סנהדרין",
+              "children": [],
+              "leaf": true,
+              "contentRef": null
+            },
+            {
+              "id": "083db6d0c3",
+              "name": "מכות",
+              "children": [],
+              "leaf": true,
+              "contentRef": null
+            },
+            {
+              "id": "14a7a0ec2d",
+              "name": "שבועות",
+              "children": [],
+              "leaf": true,
+              "contentRef": null
+            },
+            {
+              "id": "24700b91b4",
+              "name": "עבודה זרה",
+              "children": [],
+              "leaf": true,
+              "contentRef": null
+            },
+            {
+              "id": "7572c9c14a",
+              "name": "הוריות",
+              "children": [],
+              "leaf": true,
+              "contentRef": null
+            }
+          ],
+          "leaf": false,
+          "contentRef": null,
+          "type": "folder"
+        },
+        {
+          "id": "517b274878",
+          "name": "קדשים",
+          "children": [
+            {
+              "id": "707f0006d1",
+              "name": "זבחים",
+              "children": [],
+              "leaf": true,
+              "contentRef": null
+            },
+            {
+              "id": "0fb201146c",
+              "name": "מנחות",
+              "children": [],
+              "leaf": true,
+              "contentRef": null
+            },
+            {
+              "id": "9bc402d7ba",
+              "name": "חולין",
+              "children": [],
+              "leaf": true,
+              "contentRef": null
+            },
+            {
+              "id": "85889cdc88",
+              "name": "בכורות",
+              "children": [],
+              "leaf": true,
+              "contentRef": null
+            },
+            {
+              "id": "a6584ef171",
+              "name": "ערכין",
+              "children": [],
+              "leaf": true,
+              "contentRef": null
+            },
+            {
+              "id": "b827b8820f",
+              "name": "תמורה",
+              "children": [],
+              "leaf": true,
+              "contentRef": null
+            },
+            {
+              "id": "151967e56a",
+              "name": "כריתות",
+              "children": [],
+              "leaf": true,
+              "contentRef": null
+            },
+            {
+              "id": "4911fb61ef",
+              "name": "מעילה",
+              "children": [],
+              "leaf": true,
+              "contentRef": null
+            },
+            {
+              "id": "b7130fdc8f",
+              "name": "תמיד",
+              "children": [],
+              "leaf": true,
+              "contentRef": null
+            }
+          ],
+          "leaf": false,
+          "contentRef": null,
+          "type": "folder"
+        },
+        {
+          "id": "9a10607d9e",
+          "name": "טהרות",
+          "children": [
+            {
+              "id": "2eb43933bb",
+              "name": "נדה",
+              "children": [],
+              "leaf": true,
+              "contentRef": null
+            }
+          ],
+          "leaf": false,
+          "contentRef": null,
+          "type": "folder"
+        }
+      ],
+      "leaf": false,
+      "contentRef": null
+    },
+    {
+      "id": "fbe65fa2ae",
+      "name": "הלכה",
+      "children": [],
+      "leaf": true,
+      "contentRef": null
+    },
+    {
+      "id": "8be37339c3",
+      "name": "מוסר וחסידות",
+      "children": [],
+      "leaf": true,
+      "contentRef": null
+    },
+    {
+      "id": "93c05603b2",
+      "name": "תפילות",
+      "children": [],
+      "leaf": true,
+      "contentRef": null
+    }
+  ]
+}
