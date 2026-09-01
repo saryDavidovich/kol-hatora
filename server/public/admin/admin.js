@@ -62,6 +62,8 @@ async function render() {
   if (treeNodeMatch) return renderTreeEditor(treeNodeMatch[1]);
   const genericNodeMatch = hash.match(/^#\/node\/([^/]+)$/);
   if (genericNodeMatch) return renderNodeContentEditor(genericNodeMatch[1]);
+  const wikisourceImportMatch = hash.match(/^#\/wikisource-import\/([^/]+)$/);
+  if (wikisourceImportMatch) return renderWikisourceImport(wikisourceImportMatch[1]);
   const bookMatch = hash.match(/^#\/book\/([^/]+)$/);
   if (bookMatch) return renderBookEditor(decodeURIComponent(bookMatch[1]));
 
@@ -686,7 +688,8 @@ async function renderTreeEditor(nodeId) {
           ` : ''}
           <button data-action="rename" data-id="${child.id}" title="שנה שם">✏️</button>
           <button data-action="toggle-type" data-id="${child.id}" data-current-type="${childType}" title="שנה סוג (תיקייה/קובץ)">${isFolder ? '📁→📄' : '📄→📁'}</button>
-          <button data-action="import-book" data-id="${child.id}" data-name="${child.name}" title="ייבוא ספר שלם">📥</button>
+          ${isFolder ? `<button data-action="wikisource-import" data-id="${child.id}" data-name="${child.name}" title="ייבוא אוטומטי מוויקיטקסט">🔗</button>` : ''}
+          <button data-action="import-book" data-id="${child.id}" data-name="${child.name}" title="ייבוא קובץ טקסט (למשל למסכת גמרא)">📥</button>
           <button data-action="delete" data-id="${child.id}" title="מחק">🗑</button>
         </div>
       </div>`;
@@ -756,6 +759,9 @@ async function renderTreeEditor(nodeId) {
         await api(`/menu-tree/node/${id}/set-type`, { method: 'POST', body: JSON.stringify({ type: newType }) });
       } else if (action === 'import-book') {
         location.hash = `#/book/${encodeURIComponent(btn.dataset.name)}`;
+        return;
+      } else if (action === 'wikisource-import') {
+        location.hash = `#/wikisource-import/${id}`;
         return;
       }
       renderTreeEditor(nodeId);
@@ -979,5 +985,134 @@ function wireNodeContentEvents(nodeId) {
   document.getElementById('uploadBtn').addEventListener('click', async () => {
     const { jobId } = await api(`/node-content/${nodeId}/upload`, { method: 'POST', body: '{}' });
     await pollJob(jobId, jobStatusEl);
+  });
+}
+
+// ==================== ייבוא מוויקיטקסט (לצומת תיקייה) ====================
+
+async function renderWikisourceImport(nodeId) {
+  app.innerHTML = `${topbar()}<div class="content"><div class="loading">טוען...</div></div>`;
+  attachTopbarHandlers();
+
+  const [{ tree }, torahInfo] = await Promise.all([
+    api('/menu-tree'),
+    api('/wikisource-import/torah-sfarim'),
+  ]);
+  const found = findNodeWithAncestors(tree, nodeId);
+  const node = found ? found.node : null;
+  if (!node) { location.hash = '#/tree'; return; }
+
+  const childrenNames = (node.children || []).map((c) => c.name);
+
+  document.querySelector('.content').innerHTML = `
+    <div class="breadcrumb">${found.ancestors.map((a) => `<a href="#/tree/${a.id}">${a.name}</a>`).join(' ← ')} ← ${node.name}</div>
+    <h1 class="page-title">🔗 ייבוא מוויקיטקסט - ${node.name}</h1>
+    <p>ייבוא אוטומטי לכל ${childrenNames.length} תתי-הסעיפים הקיימים כאן: <strong>${childrenNames.join(', ')}</strong></p>
+
+    <div class="page-frame" style="margin-bottom:1rem;">
+      <label><input type="radio" name="importMode" value="torah" checked /> תורה (תבניות מאומתות, כולל חיבור פרקים אוטומטי לפי פרשה)</label><br>
+      <label><input type="radio" name="importMode" value="custom" /> מותאם אישית (כל ספר אחר - דורש בדיקה ידנית!)</label>
+    </div>
+
+    <div id="torahConfig" class="page-frame" style="margin-bottom:1rem;">
+      <label>שם הספר (חומש):</label>
+      <select id="torahSefer" style="padding:0.4em;">
+        ${torahInfo.sfarim.map((s) => `<option value="${s}">${s}</option>`).join('')}
+      </select>
+      <p style="margin-top:0.6em;">מפרשים לכלול:</p>
+      ${torahInfo.commentators.map((c) => `<label style="display:block;"><input type="checkbox" class="torahCommentator" value="${c}" checked /> ${c}</label>`).join('')}
+      <p style="font-size:0.85rem; color:var(--ink-soft); margin-top:0.6em;">
+        ⚠️ הטקסט עשוי לכלול "עודף" בתחילת/סוף כל פרשה (חלק מהפרשה השכנה, כי פרשה
+        לא תמיד נגמרת בדיוק בסוף פרק) - יש לבדוק ולתקן ידנית בעורך התוכן אחרי הייבוא.
+      </p>
+    </div>
+
+    <div id="customConfig" class="page-frame" style="margin-bottom:1rem; display:none;">
+      <label>שם הספר (כפי שמופיע בכתובות ויקיטקסט):</label>
+      <input type="text" id="customSefer" placeholder="למשל: אורח חיים" style="width:100%; padding:0.4em; margin-bottom:0.6em;" />
+      <label>תבנית כתובת לתוכן הראשי (השתמשו ב-{sefer} וב-{item}):</label>
+      <input type="text" id="customMainTemplate" placeholder="למשל: שולחן ערוך/{sefer}/{item}" style="width:100%; padding:0.4em; margin-bottom:0.6em;" />
+      <button id="testMainTemplateBtn">🧪 בדוק תבנית (על "${childrenNames[0] || ''}")</button>
+      <div id="testMainResult" style="margin-top:0.5em; font-size:0.85rem;"></div>
+
+      <p style="margin-top:1rem;">מפרשים (שם + תבנית לכל אחד):</p>
+      <div id="customCommentatorsList"></div>
+      <button id="addCustomCommentatorBtn">+ הוסף מפרש</button>
+    </div>
+
+    <button class="primary" id="startImportBtn">🚀 התחל ייבוא</button>
+    <div class="job-status" id="importJobStatus"></div>
+    <div id="importResults" style="margin-top:1rem;"></div>
+  `;
+
+  document.querySelectorAll('input[name="importMode"]').forEach((radio) => {
+    radio.addEventListener('change', () => {
+      const isTorah = document.querySelector('input[name="importMode"]:checked').value === 'torah';
+      document.getElementById('torahConfig').style.display = isTorah ? 'block' : 'none';
+      document.getElementById('customConfig').style.display = isTorah ? 'none' : 'block';
+    });
+  });
+
+  function addCommentatorRow(name = '', template = '') {
+    const list = document.getElementById('customCommentatorsList');
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex; gap:0.4em; margin-bottom:0.4em;';
+    row.innerHTML = `
+      <input type="text" class="comName" placeholder="שם המפרש" value="${name}" style="width:30%; padding:0.4em;" />
+      <input type="text" class="comTemplate" placeholder="תבנית (עם {sefer} ו-{item})" value="${template}" style="flex-grow:1; padding:0.4em;" />
+      <button data-remove-row>🗑</button>
+    `;
+    row.querySelector('[data-remove-row]').addEventListener('click', () => row.remove());
+    list.appendChild(row);
+  }
+  document.getElementById('addCustomCommentatorBtn').addEventListener('click', () => addCommentatorRow());
+
+  document.getElementById('testMainTemplateBtn').addEventListener('click', async () => {
+    const resultEl = document.getElementById('testMainResult');
+    resultEl.textContent = 'בודק...';
+    try {
+      const r = await api('/wikisource-import/test-template', {
+        method: 'POST',
+        body: JSON.stringify({
+          template: document.getElementById('customMainTemplate').value,
+          sefer: document.getElementById('customSefer').value,
+          item: childrenNames[0],
+        }),
+      });
+      resultEl.innerHTML = `<strong>נמצא: ${r.title}</strong><br>${r.sample}`;
+    } catch (e) {
+      resultEl.innerHTML = `<span class="column-error">שגיאה: ${e.message}</span>`;
+    }
+  });
+
+  document.getElementById('startImportBtn').addEventListener('click', async () => {
+    const mode = document.querySelector('input[name="importMode"]:checked').value;
+    const statusEl = document.getElementById('importJobStatus');
+    const body = { mode };
+
+    if (mode === 'torah') {
+      body.sefer = document.getElementById('torahSefer').value;
+      body.commentators = [...document.querySelectorAll('.torahCommentator:checked')].map((cb) => ({ name: cb.value }));
+    } else {
+      body.sefer = document.getElementById('customSefer').value;
+      body.mainTemplate = document.getElementById('customMainTemplate').value;
+      body.commentators = [...document.querySelectorAll('#customCommentatorsList > div')].map((row) => ({
+        name: row.querySelector('.comName').value,
+        template: row.querySelector('.comTemplate').value,
+      })).filter((c) => c.name && c.template);
+    }
+
+    if (!confirm(`לייבא ל-${childrenNames.length} תתי-סעיפים? זה עשוי לקחת כמה דקות (וויקיטקסט מגביל קצב בקשות).`)) return;
+
+    const { jobId } = await api(`/wikisource-import/${nodeId}/import`, { method: 'POST', body: JSON.stringify(body) });
+    const result = await pollJob(jobId, statusEl);
+    if (result && result.results) {
+      document.getElementById('importResults').innerHTML = result.results.map((r) => `
+        <div style="padding:0.4em; border-right:3px solid ${r.ok ? 'var(--sage)' : 'var(--wine)'}; margin-bottom:0.3em;">
+          <strong>${r.name}</strong> ${r.ok ? '✓' : '✗'}
+          ${r.errors.length ? `<div style="font-size:0.85rem; color:var(--wine);">${r.errors.join('; ')}</div>` : ''}
+        </div>
+      `).join('');
+    }
   });
 }

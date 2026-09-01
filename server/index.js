@@ -63,6 +63,7 @@ app.post('/admin/api/logout', adminAuth.handleLogout);
 app.use('/admin/api/book', adminAuth.requireAdminAuth, require('./bookRoutes'));
 app.use('/admin/api/menu-tree', adminAuth.requireAdminAuth, require('./menuTreeRoutes'));
 app.use('/admin/api/node-content', adminAuth.requireAdminAuth, require('./nodeContentRoutes'));
+app.use('/admin/api/wikisource-import', adminAuth.requireAdminAuth, require('./wikisourceImportRoutes'));
 app.use('/admin/api', adminAuth.requireAdminAuth, adminRoutes);
 app.use('/admin', express.static(path.join(__dirname, 'public', 'admin')));
 
