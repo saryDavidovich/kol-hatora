@@ -164,7 +164,14 @@ async function getMasechetYemotFolder(masechet, daf, amud) {
   return `/${yemotPath.join('/')}/${dafPadded}/${amud}`;
 }
 
+/** מאפס את העץ בחזרה לזריעה המקורית (דורס כל שינוי קיים - שימוש מודע בלבד) */
+async function resetToSeed() {
+  const tree = seedTree();
+  await saveTree(tree);
+  return tree;
+}
+
 module.exports = {
   getTree, saveTree, findNode, addNode, renameNode, deleteNode, reorderChildren, setContentRef,
-  getYemotPath, findNodeByContentRef, findNodeByYemotPath, getMasechetYemotFolder,
+  getYemotPath, findNodeByContentRef, findNodeByYemotPath, getMasechetYemotFolder, resetToSeed,
 };

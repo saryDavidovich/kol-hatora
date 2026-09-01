@@ -112,6 +112,13 @@ async function renderTreeEditor(nodeId) {
     <p>זהו התפריט שימות המשיח משמיע בפועל כאן, לפי הסדר שמופיע למטה - גררו כרטיס לשינוי הסדר.
        ${isLeafRoot ? ' אין עדיין תתי-סעיפים כאן.' : ''}</p>
 
+    ${node.id === 'root' ? `
+      <div class="page-frame" style="margin-bottom:1rem;">
+        <button id="resetTreeBtn">🔄 אפס עץ לברירת מחדל (מוחק כל שינוי!)</button>
+        <div id="resetStatus" style="margin-top:0.4em; font-size:0.85rem;"></div>
+      </div>
+    ` : ''}
+
     <div id="childrenContainer" style="display:flex; flex-direction:column; gap:0.5em;">${childrenListHtml}</div>
 
     <div class="daf-actions">
@@ -119,6 +126,21 @@ async function renderTreeEditor(nodeId) {
       <button class="primary" id="addChildBtn">+ הוסף כרטיס כאן</button>
     </div>
   `;
+
+  if (node.id === 'root') {
+    document.getElementById('resetTreeBtn').addEventListener('click', async () => {
+      if (!confirm('זה ימחק את כל השינויים בעץ ויחזיר אותו למבנה המקורי (6 סדרים, 38 מסכתות). להמשיך?')) return;
+      const statusEl = document.getElementById('resetStatus');
+      statusEl.textContent = 'מאפס...';
+      try {
+        await api('/menu-tree/reset-to-seed', { method: 'POST', body: '{}' });
+        statusEl.textContent = 'אופס בהצלחה ✓';
+        renderTreeEditor(nodeId);
+      } catch (e) {
+        statusEl.textContent = `שגיאה: ${e.message}`;
+      }
+    });
+  }
 
   const container = document.getElementById('childrenContainer');
   let dragSrcId = null;

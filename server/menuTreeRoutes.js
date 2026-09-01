@@ -10,6 +10,15 @@ router.get('/', async (req, res) => {
   res.json({ tree });
 });
 
+router.post('/reset-to-seed', async (req, res) => {
+  try {
+    const tree = await menuTree.resetToSeed();
+    res.json({ ok: true, tree });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
 router.post('/node/:parentId/add', async (req, res) => {
   try {
     const { name } = req.body;
