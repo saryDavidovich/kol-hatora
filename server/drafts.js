@@ -1,9 +1,4 @@
 // server/drafts.js
-//
-// שומר את הטקסט הערוך (אחרי תיקונים/ניקוד שהמנהל ביצע בממשק הניהול)
-// לפני שהוא נשלח ל-TTS. זה נפרד לגמרי מהתוכן הסופי שנבנה בפועל
-// (data/shas-content) - כאן זו רק "טיוטת עבודה" בפורמט JSON פשוט.
-
 const path = require('path');
 const fs = require('fs-extra');
 
@@ -11,7 +6,7 @@ const DRAFTS_ROOT = process.env.DRAFTS_ROOT || path.join(__dirname, '..', 'data'
 
 function draftPath(masechet, daf, amud) {
   const dafPadded = String(daf).padStart(3, '0');
-  return path.join(DRAFTS_ROOT, masechet, `daf-${dafPadded}`, `${amud}.json`);
+  return path.join(DRAFTS_ROOT, masechet, `daf-${dafPadded}-${amud}.json`);
 }
 
 async function getDraft(masechet, daf, amud) {
@@ -23,9 +18,8 @@ async function getDraft(masechet, daf, amud) {
 async function saveDraft(masechet, daf, amud, data) {
   const p = draftPath(masechet, daf, amud);
   await fs.ensureDir(path.dirname(p));
-  const payload = { ...data, updatedAt: new Date().toISOString() };
-  await fs.writeJson(p, payload, { spaces: 2 });
-  return payload;
+  await fs.writeJson(p, { ...data, updatedAt: new Date().toISOString() }, { spaces: 2 });
+  return true;
 }
 
-module.exports = { getDraft, saveDraft, draftPath };
+module.exports = { getDraft, saveDraft };

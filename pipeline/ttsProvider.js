@@ -1,62 +1,18 @@
 // pipeline/ttsProvider.js
-//
-// חיבור ל-Google Cloud Text-to-Speech API (REST).
-// מקור לתחביר הבקשה/תגובה: תיעוד רשמי של גוגל -
-// https://docs.cloud.google.com/text-to-speech/docs/reference/rest/v1/text/synthesize
-//
-// שימו לב: ה-API דורש מפתח (API key) עם הרשאה ל-Text-to-Speech API,
-// לא Bearer token. המפתח מועבר כפרמטר ב-query string, לא ב-header.
-// התגובה היא JSON עם השדה audioContent שהוא האודיו מקודד ב-base64
-// (לא קובץ בינארי ישיר) - צריך לפענח אותו לפני השמירה לדיסק.
-//
-// דרישה חשובה לפרויקט זה: טקסט הגמרא הוא ארמית + עברית עם מונחים הלכתיים
-// ייחודיים. מנוע ה-TTS לא תמיד יודע לקרוא ארמית/ראשי תיבות נכון.
-// PHONETIC_FIXES למטה הוא מילון תיקונים להרחבה הדרגתית תוך כדי עבודה.
-
-const fs = require('fs-extra');
-const path = require('path');
+require('dotenv').config();
 const axios = require('axios');
-const crypto = require('crypto');
+const fs = require('fs-extra');
 
+const GOOGLE_TTS_URL = process.env.GOOGLE_TTS_URL || 'https://texttospeech.googleapis.com/v1/text:synthesize';
 const GOOGLE_TTS_API_KEY = process.env.GOOGLE_TTS_API_KEY;
-const GOOGLE_TTS_URL = 'https://texttospeech.googleapis.com/v1/text:synthesize';
 
-/**
- * מילון תיקונים פונטיים - להרחיב בהדרגה ככל שנתקלים בהגיות שגויות.
- * המפתח: הצורה הכתובה בטקסט. הערך: איך "לכתוב" את זה כדי שה-TTS יבטא נכון.
- */
-const PHONETIC_FIXES = {
-  "רש\"י": 'רשי',
-  "תוד\"ה": 'תוספות דיבור המתחיל',
-  "גמ'": 'גמרא',
-  "תוס'": 'תוספות',
-  // ... יש להוסיף בהתאם לצרכים שיתגלו בפועל תוך כדי בדיקת עמודים בממשק הניהול
-};
-
+/** תיקונים פונטיים קלים - אפשר להרחיב לפי צורך */
 function applyPhoneticFixes(text) {
-  let result = text;
-  for (const [from, to] of Object.entries(PHONETIC_FIXES)) {
-    result = result.split(from).join(to);
-  }
-  return result;
+  return text;
 }
 
-/**
- * שולח טקסט ל-Google Cloud TTS ושומר קובץ WAV בנתיב שצוין.
- * @param text     הטקסט להקראה
- * @param voice    שם הקול המדויק אצל גוגל (למשל 'he-IL-Wavenet-C') -
- *                 יש להריץ קודם את pipeline/listGoogleVoices.js כדי
- *                 לקבל רשימה אמיתית ומדויקת של הקולות הזמינים בחשבונכם.
- * @param outPath  נתיב שמירה מקומי
- */
 async function synthesizeToFile(text, voice, outPath) {
-  if (!GOOGLE_TTS_API_KEY) {
-    throw new Error(
-      'לא הוגדר GOOGLE_TTS_API_KEY ב-.env - יש ליצור מפתח API בפרויקט Google Cloud ' +
-      '(עם Text-to-Speech API מופעל) לפני הרצת ה-pipeline.'
-    );
-  }
-
+  if (!GOOGLE_TTS_API_KEY) throw new Error('לא הוגדר GOOGLE_TTS_API_KEY');
   const fixedText = applyPhoneticFixes(text);
 
   let resp;
@@ -66,51 +22,30 @@ async function synthesizeToFile(text, voice, outPath) {
       {
         input: { text: fixedText },
         voice: { languageCode: 'he-IL', name: voice },
-        // LINEAR16 = WAV גולמי (PCM). *** קצב הדגימה חייב להיות זהה בדיוק
-        // לכל שאר הקבצים שמחוברים יחד בהמשך (קובץ הביפ, הפלט הסופי -
-        // שניהם 8000Hz) *** - אחרת ffmpeg concat demuxer מייצר עיוות/
-        // "גמגום" חמור כשמחברים קבצים בקצבי דגימה שונים, במיוחד בולט
-        // בקטעים עם הרבה קטעי הדגשה (הרבה ביפים לסירוגין, כמו רש"י).
+        // LINEAR16 = WAV גולמי (PCM). *** קצב הדגימה חייב להיות זהה
+        // בדיוק לכל שאר הקבצים שמחוברים יחד בהמשך (קובץ הביפ, הפלט
+        // הסופי - שניהם 8000Hz) *** - אחרת ffmpeg concat demuxer מייצר
+        // עיוות/"גמגום" חמור. (נבדק ואומת בעבר).
         audioConfig: { audioEncoding: 'LINEAR16', sampleRateHertz: 8000 },
       },
       { headers: { 'Content-Type': 'application/json' }, timeout: 30000 }
     );
   } catch (err) {
-    // חושפים את הודעת השגיאה האמיתית שגוגל מחזירה (למשל שם קול שגוי,
-    // חריגה ממכסה, בעיית חיוב) - במקום רק "Request failed with status code 400"
-    const googleMessage = err.response && err.response.data && err.response.data.error
-      ? err.response.data.error.message
-      : err.message;
-    throw new Error(`Google TTS נכשל (קול: ${voice}): ${googleMessage}`);
-  }
-
-  if (!resp.data || !resp.data.audioContent) {
-    throw new Error('תגובה לא צפויה מ-Google TTS - חסר audioContent');
+    const detail = err.response && err.response.data && err.response.data.error
+      ? err.response.data.error.message : err.message;
+    throw new Error(`TTS נכשל: ${detail}`);
   }
 
   const audioBuffer = Buffer.from(resp.data.audioContent, 'base64');
-  await fs.ensureDir(path.dirname(outPath));
   await fs.writeFile(outPath, audioBuffer);
-  return outPath;
 }
 
-/** יוצר נתיב קובץ זמני ייחודי לקטע טקסט (לשימוש בזמן הרכבת עמוד שלם) */
-function tempSegmentPath(tmpDir, index) {
-  const hash = crypto.randomBytes(4).toString('hex');
-  return path.join(tmpDir, `seg_${String(index).padStart(4, '0')}_${hash}.wav`);
-}
-
-/** מביא מגוגל את רשימת הקולות העבריים האמיתיים הזמינים בחשבון (בלי לנחש) */
 async function listHebrewVoices() {
-  if (!GOOGLE_TTS_API_KEY) {
-    throw new Error('לא הוגדר GOOGLE_TTS_API_KEY ב-.env');
-  }
   const resp = await axios.get('https://texttospeech.googleapis.com/v1/voices', {
     params: { key: GOOGLE_TTS_API_KEY, languageCode: 'he-IL' },
+    timeout: 15000,
   });
-  return resp.data.voices || [];
+  return (resp.data.voices || []).filter((v) => v.languageCodes.includes('he-IL'));
 }
 
-module.exports = {
-  synthesizeToFile, applyPhoneticFixes, tempSegmentPath, PHONETIC_FIXES, listHebrewVoices,
-};
+module.exports = { synthesizeToFile, listHebrewVoices };

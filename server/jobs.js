@@ -1,52 +1,35 @@
 // server/jobs.js
 //
-// מעקב פשוט (בזיכרון) אחר משימות רקע ארוכות (בניית אודיו/TTS, העלאה לימות),
-// כדי שממשק הניהול יוכל להראות "בתהליך... 40%" ולא רק לתקוע spinner עיוור.
-// מספיק לצרכי ממשק ניהול יחיד (לא בנוי למקביליות מרובת-שרתים).
+// הרצת פעולות ארוכות (בניית TTS, העלאה לימות) ברקע, עם מעקב התקדמות
+// שהממשק יכול לבדוק (polling) בלי לחכות לתשובה סינכרונית.
 
 const crypto = require('crypto');
+const jobs = new Map();
 
-const jobs = new Map(); // id -> { status, progress, message, result, error }
-
-function createJob() {
-  const id = crypto.randomBytes(8).toString('hex');
-  jobs.set(id, { id, status: 'pending', progress: 0, message: '', result: null, error: null, createdAt: Date.now() });
-  return id;
-}
-
-function updateJob(id, patch) {
-  const job = jobs.get(id);
-  if (!job) return;
-  Object.assign(job, patch);
-}
-
-function getJob(id) {
-  return jobs.get(id) || null;
-}
-
-/** מריץ פונקציה אסינכרונית כ"job" עם מעקב, בלי לחסום את הבקשה שיצרה אותה */
 function runAsJob(fn) {
-  const id = createJob();
-  updateJob(id, { status: 'running', message: 'מתחיל...' });
+  const jobId = crypto.randomBytes(8).toString('hex');
+  jobs.set(jobId, { status: 'running', progress: 0, message: 'מתחיל...', result: null, error: null });
 
-  (async () => {
-    try {
-      const result = await fn((progress, message) => updateJob(id, { progress, message }));
-      updateJob(id, { status: 'done', progress: 100, result, message: 'הושלם' });
-    } catch (err) {
-      updateJob(id, { status: 'error', error: err.message, message: `שגיאה: ${err.message}` });
-    }
-  })();
+  const progress = (pct, message) => {
+    const job = jobs.get(jobId);
+    if (job) { job.progress = pct; job.message = message; }
+  };
 
-  return id;
+  fn(progress)
+    .then((result) => {
+      const job = jobs.get(jobId);
+      if (job) { job.status = 'done'; job.progress = 100; job.result = result; }
+    })
+    .catch((err) => {
+      const job = jobs.get(jobId);
+      if (job) { job.status = 'error'; job.error = err.message; }
+    });
+
+  return jobId;
 }
 
-// ניקוי jobs ישנים (מעל שעה) כדי לא לדלוף זיכרון בהרצה ארוכה
-setInterval(() => {
-  const cutoff = Date.now() - 60 * 60 * 1000;
-  for (const [id, job] of jobs) {
-    if (job.createdAt < cutoff) jobs.delete(id);
-  }
-}, 15 * 60 * 1000);
+function getJob(jobId) {
+  return jobs.get(jobId) || null;
+}
 
-module.exports = { createJob, updateJob, getJob, runAsJob };
+module.exports = { runAsJob, getJob };

@@ -1,74 +1,32 @@
 // pipeline/nikud.js
 //
-// חיבור לשירות הניקוד האוטומטי של דיקטה (Dicta) - חינמי.
-// מקור לתחביר הבקשה: קוד PHP עובד שפורסם בפורום מפתחי ימות המשיח
-// (https://f2.freeivr.co.il/topic/18461), שמשתמש ב-endpoint ובפרמטרים האלה.
-//
-// הערה: הפרמטר genre='rabbinic' הוא בחירה סבירה עבור טקסט גמרא/רש"י/תוספות
-// (על סמך כך שבאתר nakdansimple.dicta.org.il מוזכר שה"נקדן האוטומטי" תומך
-// ב"טקסטים רבניים - ספרות חז״ל, ספרות הראשונים"), אבל לא מצאתי תיעוד
-// רשמי שמפרט את כל הערכים האפשריים לפרמטר genre. אם התוצאה לא מספיק
-// מדויקת על טקסט תלמודי, כדאי לנסות גם genre='premodern' או לפנות לדיקטה
-// לבירור הערך המדויק לספרות חז"ל.
+// ניקוד חינמי דרך שירות דיקטה (Dicta) - API ציבורי.
 
+require('dotenv').config();
 const axios = require('axios');
 
-const DICTA_NAKDAN_URL = process.env.DICTA_NAKDAN_URL
-  || 'https://nakdan-u1-0.loadbalancer.dicta.org.il/api';
+const DICTA_NIKUD_URL = process.env.DICTA_NIKUD_URL || 'https://nakdan-api-lab.loadbalancer.dicta.org.il/addnikud';
 
-/**
- * שולח טקסט לא מנוקד ומחזיר טקסט מנוקד.
- * @param text  טקסט עברי/ארמי ללא ניקוד (או עם ניקוד חלקי)
- * @param genre 'rabbinic' (ברירת מחדל, מתאים לגמרא/רש"י/תוספות) | 'modern'
- */
 async function addNikud(text, genre = 'rabbinic') {
-  if (!text || !text.trim()) return text;
+  const resp = await axios.post(DICTA_NIKUD_URL, {
+    task: 'nakdan',
+    genre,
+    data: text,
+    addmorph: false,
+    keepqq: false,
+    keepmetagim: true,
+  }, {
+    headers: { 'Content-Type': 'application/json' },
+    timeout: 60000,
+  });
 
-  const resp = await axios.post(
-    DICTA_NAKDAN_URL,
-    {
-      task: 'nakdan',
-      data: text,
-      addmorph: true,
-      keepmetagim: true,
-      keepqq: false,
-      nodageshdefmem: false,
-      patachma: false,
-      useTokenization: true,
-      genre,
-    },
-    { headers: { 'Content-Type': 'application/json' }, timeout: 30000 }
-  );
+  const data = resp.data;
+  if (!Array.isArray(data)) throw new Error('תגובה לא צפויה משירות הניקוד');
 
-  // תגובת ה-API האמיתית (נבדק בפועל): { data: [ { str, nakdan: { options, sep } }, ... ] }
-  // כל איבר הוא או מילה (nakdan.options מכיל את האפשרויות המנוקדות,
-  // האפשרות הראשונה - levelChoice 1 - היא הטובה ביותר) או מפריד
-  // (sep=true: רווח/פיסוק, ללא ניקוד - פשוט שומרים את str כמו שהוא).
-  const units = resp.data && resp.data.data;
-  if (!Array.isArray(units)) {
-    throw new Error('תגובה לא צפויה משירות הניקוד - יש לבדוק את מבנה ה-JSON שחוזר');
-  }
-
-  return units
-    .map((unit) => {
-      const nakdan = unit.nakdan || {};
-      if (nakdan.sep || !nakdan.options || nakdan.options.length === 0) {
-        return unit.str || nakdan.word || '';
-      }
-      return (nakdan.options[0].w || unit.str || '').replace(/\|/g, '');
-    })
-    .join('')
-    .trim();
+  return data.map((word) => {
+    if (word.options && word.options.length) return word.options[0].w || word.word;
+    return word.word || '';
+  }).join('');
 }
 
 module.exports = { addNikud };
-
-// בדיקה ידנית: node pipeline/nikud.js "בראשית ברא אלהים את השמים ואת הארץ"
-if (require.main === module) {
-  const text = process.argv.slice(2).join(' ');
-  if (!text) {
-    console.log('שימוש: node pipeline/nikud.js "<טקסט לניקוד>"');
-    process.exit(1);
-  }
-  addNikud(text).then((r) => console.log(r)).catch((e) => { console.error(e.message); process.exit(1); });
-}

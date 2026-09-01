@@ -1,18 +1,9 @@
 {
   "name": "yemot-shas-system",
   "version": "1.0.0",
-  "description": "מערכת IVR להקראת תנ\"ך ותלמוד עבור ימות המשיח - כולל ניווט, מפרשים, וזיכרון מיקום",
-  "main": "server/index.js",
-  "type": "commonjs",
-  "engines": {
-    "node": "20.x"
-  },
+  "private": true,
   "scripts": {
-    "start": "node server/index.js",
-    "dev": "nodemon server/index.js",
-    "postinstall": "npm rebuild better-sqlite3 --build-from-source",
-    "scrape": "node pipeline/scrapeWikitext.js",
-    "build-audio": "node pipeline/buildAudio.js"
+    "start": "node server/index.js"
   },
   "dependencies": {
     "express": "^4.19.2",
@@ -20,11 +11,8 @@
     "form-data": "^4.0.0",
     "multer": "^1.4.5-lts.1",
     "better-sqlite3": "^11.3.0",
-    "axios": "^1.7.7",
     "fs-extra": "^11.2.0",
+    "axios": "^1.7.7",
     "dotenv": "^16.4.5"
-  },
-  "devDependencies": {
-    "nodemon": "^3.1.4"
   }
 }
