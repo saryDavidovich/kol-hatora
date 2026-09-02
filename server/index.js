@@ -5,6 +5,7 @@ const cookieParser = require('cookie-parser');
 const path = require('path');
 
 const proto = require('./yemotProtocol');
+const { getApiPlayerUrl } = require('./config');
 const contentIndex = require('./contentIndex');
 const menuTree = require('./menuTree');
 const db = require('./db');
@@ -111,15 +112,28 @@ app.post('/admin/api/logout', adminAuth.handleLogout);
 app.use('/admin/api/menu-tree', adminAuth.requireAdminAuth, require('./menuTreeRoutes'));
 app.use('/admin/api', adminAuth.requireAdminAuth, adminRoutes);
 
+/**
+ * מוודא שכתובת ה-API להתראות תוך-כדי-שיחה מכילה את הנתיב המלא -
+ * אם הוגדר רק דומיין בסיסי (בלי /api/player/control), מוסיפים אותו
+ * אוטומטית במקום להיכשל בשקט (בדיוק המקרה שקרה בפועל - דומיין נכון
+ * בלי הנתיב).
+ */
+function normalizeApiPlayerUrl(raw) {
+  if (!raw) return null;
+  const trimmed = raw.replace(/\/+$/, ''); // מסירים / מיותר בסוף
+  if (trimmed.endsWith('/api/player/control')) return trimmed;
+  return `${trimmed}/api/player/control`;
+}
+
 const PORT = process.env.PORT || 3000;
 
 if (!process.env.API_PLAYER_URL) {
   console.warn('⚠️⚠️⚠️  אזהרה: משתנה הסביבה API_PLAYER_URL לא מוגדר! ⚠️⚠️⚠️');
   console.warn('   תפריט המפרשים (רש"י/תוספות) ומעבר דפים לא יעבדו בטלפון -');
   console.warn('   ה-ext.ini שמועלה לימות יכיל כתובת placeholder מזויפת.');
-  console.warn('   הגדירו ב-Railway: API_PLAYER_URL=https://<הדומיין-שלכם>/api/player/control');
+  console.warn('   הגדירו ב-Railway: API_PLAYER_URL=https://<הדומיין-הבסיסי-שלכם> (בלי נתיב - הקוד מוסיף אותו לבד)');
 } else {
-  console.log(`✓ API_PLAYER_URL מוגדר: ${process.env.API_PLAYER_URL}`);
+  console.log(`✓ API_PLAYER_URL מוגדר: ${process.env.API_PLAYER_URL} → בפועל ישמש: ${getApiPlayerUrl()}`);
 }
 
 app.listen(PORT, '0.0.0.0', () => {

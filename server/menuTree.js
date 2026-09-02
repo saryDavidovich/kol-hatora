@@ -171,7 +171,40 @@ async function resetToSeed() {
   return tree;
 }
 
+/**
+ * מחזיר את כל רמות הביניים בעץ (לא כולל דף/עמוד) עבור מסכת נתונה,
+ * כל אחת עם המספר שלה בנתיב והשם הקריא מהעץ - נדרש כדי לתייג כל
+ * תיקייה בנפרד בימות (title=).
+ * @returns [{ pathPrefix: [1,1], name: 'גמרא' }, { pathPrefix: [1,1,2], name: 'מועד' }, ...]
+ */
+function getYemotPathLevelsWithNames(tree, masechet) {
+  const node = findNodeByContentRef(tree, masechet);
+  if (!node) return [];
+
+  function findChain(current, targetId, chain) {
+    if (current.id === targetId) return [...chain, current];
+    for (const child of current.children || []) {
+      const found = findChain(child, targetId, [...chain, current]);
+      if (found) return found;
+    }
+    return null;
+  }
+  const chain = findChain(tree, node.id, []);
+  if (!chain) return [];
+
+  const levels = [];
+  const pathPrefix = [];
+  for (let i = 1; i < chain.length; i++) { // מדלגים על השורש עצמו (i=0)
+    const parent = chain[i - 1];
+    const idx = parent.children.findIndex((c) => c.id === chain[i].id);
+    pathPrefix.push(idx + 1);
+    levels.push({ pathPrefix: [...pathPrefix], name: chain[i].name });
+  }
+  return levels;
+}
+
 module.exports = {
   getTree, saveTree, findNode, addNode, renameNode, deleteNode, reorderChildren, setContentRef,
   getYemotPath, findNodeByContentRef, findNodeByYemotPath, getMasechetYemotFolder, resetToSeed,
+  getYemotPathLevelsWithNames,
 };

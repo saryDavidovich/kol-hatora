@@ -8,6 +8,7 @@ const contentIndex = require('./contentIndex');
 const drafts = require('./drafts');
 const settings = require('./settings');
 const menuTree = require('./menuTree');
+const { getApiPlayerUrl } = require('./config');
 const jobs = require('./jobs');
 const MASECHTOT_DAPIM = require('../pipeline/masechtotDapim');
 const { scrapeAmudAll, splitBoldSegments } = require('../pipeline/scrapeWikitext');
@@ -15,7 +16,7 @@ const { addNikud } = require('../pipeline/nikud');
 const { addPunctuation } = require('../pipeline/punctuation');
 const { findAbbreviations } = require('../pipeline/findAbbreviations');
 const { buildTrackAudio } = require('../pipeline/buildAudio');
-const { uploadAmud } = require('../pipeline/uploadToYemot');
+const { uploadAmud, login, updateExtensionTitle } = require('../pipeline/uploadToYemot');
 const { listHebrewVoices, synthesizeSample } = require('../pipeline/ttsProvider');
 
 router.use(express.json({ limit: '2mb' }));
@@ -229,24 +230,34 @@ router.post('/daf/:masechet/:daf/:amud/upload', async (req, res) => {
     if (!process.env.API_PLAYER_URL) {
       throw new Error('משתנה הסביבה API_PLAYER_URL לא מוגדר ב-Railway - תפריט המפרשים ומעבר דפים לא יעבדו. הגדירו אותו קודם (ראו לוגי השרת להוראות).');
     }
-    const apiPlayerUrl = process.env.API_PLAYER_URL;
+    const apiPlayerUrl = getApiPlayerUrl();
     const amudHeb = amud === 'a' ? 'א' : 'ב';
-    // הערה קריאה בראש הקובץ - כדי שיהיה אפשר לזהות את התיקייה מיד
-    // כשפותחים/מציצים ב-ext.ini בממשק הקבצים של ימות, בלי לפענח נתיב
-    // מספרי. לא משנה איך התיקייה מוצגת בעץ הקבצים עצמו (לא מצאנו
-    // לזה תמיכה מתועדת) - זו רשת ביטחון פרקטית.
-    const readableComment = `; ${masechet} - דף ${daf} עמוד ${amudHeb}\n`;
-    const extIniContent = readableComment + (await fs.readFile(templatePath, 'utf-8'))
+    // title= - "כינוי השלוחה" האמיתי, מתועד רשמית (UpdateExtension עם
+    // title=), שגורם לימות להציג שם קריא. כל רמה מקבלת רק את השם שלה
+    // (לא נתיב מלא) - עקבי עם שאר רמות הביניים שמתויגות למטה.
+    const readableTitle = `title=עמוד ${amudHeb}\n`;
+    const extIniContent = readableTitle + (await fs.readFile(templatePath, 'utf-8'))
       .replace(/https:\/\/YOUR-SERVER-DOMAIN\.example\.com\/api\/player\/control/g, apiPlayerUrl);
 
     progress(30, 'מתחבר לימות...');
     const remoteFolder = await menuTree.getMasechetYemotFolder(masechet, daf, amud);
     progress(50, `מעלה ל-${remoteFolder}...`);
     await uploadAmud({ localDir, remoteFolder, extIniContent });
-    // קובץ מידע נוסף - גלוי מיד ברשימת הקבצים (לא רק כשפותחים ext.ini)
-    const { uploadTextFile, login } = require('../pipeline/uploadToYemot');
+
+    // מתייגים גם את כל תיקיות הביניים (סדרים/מסכת/דף) בנפרד - בלי
+    // לדרוס את ה-ext.ini שלהן (UpdateExtension מעדכן רק את ה-title,
+    // לא כל שאר ההגדרות - ראו pipeline/uploadToYemot.js)
+    progress(70, 'מתייג תיקיות ביניים...');
     const token = await login();
-    await uploadTextFile(token, `${masechet} - דף ${daf} עמוד ${amudHeb}`, `${remoteFolder}/_${masechet}_דף_${daf}${amudHeb}.txt`);
+    const tree = await menuTree.getTree();
+    const treeLevels = menuTree.getYemotPathLevelsWithNames(tree, masechet);
+    for (const level of treeLevels) {
+      await updateExtensionTitle(token, `/${level.pathPrefix.join('/')}`, level.name);
+    }
+    const dafPadded = String(daf).padStart(3, '0');
+    const masechetPrefix = treeLevels[treeLevels.length - 1].pathPrefix;
+    await updateExtensionTitle(token, `/${[...masechetPrefix, dafPadded].join('/')}`, `דף ${daf}`);
+
     progress(100, 'הועלה בהצלחה');
     return { remoteFolder };
   });

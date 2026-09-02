@@ -64,4 +64,17 @@ async function uploadAmud({ localDir, remoteFolder, extIniContent }) {
   return { uploadedFiles: wavFiles };
 }
 
-module.exports = { login, uploadFile, uploadTextFile, uploadAmud };
+/**
+ * מעדכן רק את השדה title (כינוי השלוחה) בתיקייה נתונה - *** לא דורס
+ * שום דבר אחר בקובץ ה-ext.ini הקיים שם *** (מתועד רשמית: UpdateExtension
+ * שונה מ-UploadTextFile בדיוק בגלל זה). משמש לתיוג תיקיות ביניים
+ * (הסדרים/המסכתות/הדף/העמוד) בלי לגעת בהגדרות שלהן.
+ */
+async function updateExtensionTitle(token, remotePath, title) {
+  await axios.get(`${YEMOT_BASE}/UpdateExtension`, {
+    params: { token, path: `ivr2:${remotePath}`, title },
+    timeout: 15000,
+  });
+}
+
+module.exports = { login, uploadFile, uploadTextFile, uploadAmud, updateExtensionTitle };
