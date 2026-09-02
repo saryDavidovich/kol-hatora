@@ -9,12 +9,61 @@ const { synthesizeToFile } = require('./ttsProvider');
 // משאירים שולי ביטחון (4000 בייט) כדי לא לגעת בקצה בדיוק.
 const MAX_TTS_BYTES = 4000;
 
+// Google TTS מתלונן על "משפט ארוך מדי" גם כשהבקשה כולה קטנה מהמגבלה,
+// אם אין בו סימני פיסוק שמפרידים בין "משפטים" (נפוץ בטקסט תלמודי בלי
+// נקודות) - לכן לא מספיק לבדוק רק את האורך הכולל, צריך גם לוודא שאין
+// "משפט" בודד (בין סימני פיסוק) שארוך מדי בפני עצמו.
+const MAX_SENTENCE_BYTES = 800; // שולי ביטחון נדיבים - הרבה מתחת למגבלת גוגל בפועל
+
+/** מפצל "משפט" ארוך מדי (בלי נקודות) - קודם לפי פסיקים, ואז לפי מילים כמוצא אחרון */
+function splitOversizedSentence(sentence) {
+  if (Buffer.byteLength(sentence, 'utf-8') <= MAX_SENTENCE_BYTES) return [sentence];
+
+  const byCommas = sentence.split(/(?<=,)\s+/);
+  if (byCommas.length > 1 && byCommas.every((p) => Buffer.byteLength(p, 'utf-8') <= MAX_SENTENCE_BYTES)) {
+    return byCommas;
+  }
+
+  // מוצא אחרון - חיתוך גס לפי מילים, בלי קשר לפיסוק
+  const words = sentence.split(/\s+/);
+  const parts = [];
+  let current = '';
+  for (const word of words) {
+    const candidate = current ? `${current} ${word}` : word;
+    if (Buffer.byteLength(candidate, 'utf-8') > MAX_SENTENCE_BYTES) {
+      if (current) parts.push(current);
+      current = word;
+    } else {
+      current = candidate;
+    }
+  }
+  if (current) parts.push(current);
+  return parts;
+}
+
 function splitLongText(text) {
-  if (Buffer.byteLength(text, 'utf-8') <= MAX_TTS_BYTES) return [text];
-  const sentences = text.split(/(?<=[.!?:])\s+/);
+  // מפצלים תמיד לפי "משפטים" (גם אם הטקסט הכולל קטן מהמגבלה) - כדי
+  // לתפוס משפטים ארוכים מדי בלי נקודות, לא רק בקשות ארוכות מדי בסך הכל.
+  const rawSentences = text.split(/(?<=[.!?:])\s+/);
+
+  // כל "משפט" שהוכרח להתפצל בלי פיסוק אמיתי (forced=true) - חייב
+  // להישאר קטע עצמאי ולא להתחבר לאחרים, אחרת מקבלים שוב בלוק ענק בלי
+  // פיסוק בין המילים המחוברות (בדיוק הבעיה המקורית).
+  const sentences = [];
+  for (const raw of rawSentences) {
+    const parts = splitOversizedSentence(raw);
+    const forced = parts.length > 1;
+    parts.forEach((p) => sentences.push({ text: p, forced }));
+  }
+
   const chunks = [];
   let current = '';
-  for (const sentence of sentences) {
+  for (const { text: sentence, forced } of sentences) {
+    if (forced) {
+      if (current) { chunks.push(current); current = ''; }
+      chunks.push(sentence); // קטע כפוי - עומד לבד, לא מתחבר לאף אחד
+      continue;
+    }
     const candidate = current ? `${current} ${sentence}` : sentence;
     if (Buffer.byteLength(candidate, 'utf-8') > MAX_TTS_BYTES) {
       if (current) chunks.push(current);
@@ -24,7 +73,7 @@ function splitLongText(text) {
     }
   }
   if (current) chunks.push(current);
-  return chunks;
+  return chunks.length ? chunks : [text];
 }
 
 /**

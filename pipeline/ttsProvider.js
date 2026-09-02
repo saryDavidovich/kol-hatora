@@ -40,6 +40,28 @@ async function synthesizeToFile(text, voice, outPath) {
   await fs.writeFile(outPath, audioBuffer);
 }
 
+/** דוגמת שמע קצרה - מחזירה base64 ישירות (לא שומרת קובץ), לשימוש בממשק */
+async function synthesizeSample(text, voice) {
+  if (!GOOGLE_TTS_API_KEY) throw new Error('לא הוגדר GOOGLE_TTS_API_KEY');
+  let resp;
+  try {
+    resp = await axios.post(
+      `${GOOGLE_TTS_URL}?key=${GOOGLE_TTS_API_KEY}`,
+      {
+        input: { text },
+        voice: { languageCode: 'he-IL', name: voice },
+        audioConfig: { audioEncoding: 'MP3' }, // MP3 קל יותר להשמעה ישירה בדפדפן
+      },
+      { headers: { 'Content-Type': 'application/json' }, timeout: 30000 }
+    );
+  } catch (err) {
+    const detail = err.response && err.response.data && err.response.data.error
+      ? err.response.data.error.message : err.message;
+    throw new Error(`יצירת דוגמה נכשלה: ${detail}`);
+  }
+  return resp.data.audioContent; // כבר base64
+}
+
 async function listHebrewVoices() {
   const resp = await axios.get('https://texttospeech.googleapis.com/v1/voices', {
     params: { key: GOOGLE_TTS_API_KEY, languageCode: 'he-IL' },
@@ -48,4 +70,4 @@ async function listHebrewVoices() {
   return (resp.data.voices || []).filter((v) => v.languageCodes.includes('he-IL'));
 }
 
-module.exports = { synthesizeToFile, listHebrewVoices };
+module.exports = { synthesizeToFile, synthesizeSample, listHebrewVoices };

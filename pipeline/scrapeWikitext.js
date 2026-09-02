@@ -72,6 +72,8 @@ function cleanWikitext(text) {
   t = stripWikiLinks(t);
   t = t.replace(/<!--[\s\S]*?-->/g, ''); // הערות HTML
   t = t.replace(/\[עריכה\]/g, '');
+  t = t.replace(/<[^>]+>/g, ' '); // תגי HTML גולמיים (div, span וכו') - נשאר רק הטקסט שביניהם
+  t = t.replace(/\s{2,}/g, ' ').trim();
   return t;
 }
 

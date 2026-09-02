@@ -16,7 +16,7 @@ const { addPunctuation } = require('../pipeline/punctuation');
 const { findAbbreviations } = require('../pipeline/findAbbreviations');
 const { buildTrackAudio } = require('../pipeline/buildAudio');
 const { uploadAmud } = require('../pipeline/uploadToYemot');
-const { listHebrewVoices } = require('../pipeline/ttsProvider');
+const { listHebrewVoices, synthesizeSample } = require('../pipeline/ttsProvider');
 
 router.use(express.json({ limit: '2mb' }));
 
@@ -133,11 +133,47 @@ router.post('/daf/:masechet/:daf/:amud/check-abbreviations', async (req, res) =>
 });
 
 // --- רשימת קולות עברית זמינים ---
+// תמחור גוגל TTS (דולר ל-מיליון תווים) - מזוהה לפי הדפוס בשם הקול.
+// מבוסס על טבלת התמחור הפומבית של גוגל (עודכן 2026).
+const TIER_PRICING = [
+  { pattern: /Studio/i, labelHe: 'סטודיו (פרימיום)', pricePerMillion: 160 },
+  { pattern: /Chirp3.*HD|Chirp-HD/i, labelHe: 'Chirp3 HD (חדש, טבעי מאוד)', pricePerMillion: 30 },
+  { pattern: /Neural2/i, labelHe: 'נוירל2', pricePerMillion: 16 },
+  { pattern: /Polyglot/i, labelHe: 'פוליגלוט', pricePerMillion: 16 },
+  { pattern: /Wavenet/i, labelHe: 'WaveNet (טבעי)', pricePerMillion: 4 },
+  { pattern: /Standard/i, labelHe: 'רגיל', pricePerMillion: 4 },
+];
+
+function classifyVoice(voice) {
+  const tier = TIER_PRICING.find((t) => t.pattern.test(voice.name)) || { labelHe: 'לא ידוע', pricePerMillion: null };
+  const genderHe = voice.ssmlGender === 'MALE' ? 'גברי' : voice.ssmlGender === 'FEMALE' ? 'נשי' : 'לא ידוע';
+  return {
+    ...voice,
+    tierLabel: tier.labelHe,
+    pricePerMillionChars: tier.pricePerMillion,
+    genderHe,
+  };
+}
+
 router.get('/voices', async (req, res) => {
   try {
     const voices = await listHebrewVoices();
+    const enriched = voices.map(classifyVoice).sort((a, b) => (a.pricePerMillionChars || 0) - (b.pricePerMillionChars || 0));
     const current = await settings.getVoices();
-    res.json({ voices, current });
+    res.json({ voices: enriched, current });
+  } catch (err) {
+    res.status(502).json({ error: err.message });
+  }
+});
+
+// --- דוגמת שמע קצרה לקול נבחר (base64, מוטמע ישירות בתגובה - אין צורך בשמירה לדיסק) ---
+router.post('/voices/sample', async (req, res) => {
+  const { voiceName } = req.body;
+  if (!voiceName) return res.status(400).json({ error: 'חסר שם קול' });
+  try {
+    const sampleText = 'מאימתי קורין את שמע בערבין, משעה שהכהנים נכנסים לאכול בתרומתן';
+    const audioBase64 = await synthesizeSample(sampleText, voiceName);
+    res.json({ audioBase64 });
   } catch (err) {
     res.status(502).json({ error: err.message });
   }

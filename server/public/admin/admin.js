@@ -432,27 +432,61 @@ async function renderVoiceSettings() {
   attachTopbarHandlers();
 
   const { voices, current } = await api('/voices');
-  const options = (selected) => voices.map((v) => `<option value="${v.name}" ${v.name === selected ? 'selected' : ''}>${v.name} (${v.ssmlGender})</option>`).join('');
+
+  const rows = voices.map((v) => `
+    <div class="page-frame" style="margin-bottom:0.6rem; display:flex; align-items:center; gap:1em; flex-wrap:wrap;">
+      <div style="flex-grow:1; min-width:200px;">
+        <strong>${v.name}</strong><br>
+        <span style="font-size:0.85rem; color:var(--ink-soft);">
+          קול ${v.genderHe} &nbsp;·&nbsp; ${v.tierLabel}
+          ${v.pricePerMillionChars != null ? `&nbsp;·&nbsp; $${v.pricePerMillionChars} ל-מיליון תווים` : ''}
+        </span>
+      </div>
+      <label style="font-size:0.85rem;"><input type="radio" name="voiceNormalRadio" value="${v.name}" ${v.name === current.voiceNormal ? 'checked' : ''} /> רגיל</label>
+      <label style="font-size:0.85rem;"><input type="radio" name="voiceBoldRadio" value="${v.name}" ${v.name === current.voiceBold ? 'checked' : ''} /> מודגש</label>
+      <button data-sample="${v.name}">🔊 השמע דוגמה</button>
+    </div>`).join('');
 
   document.querySelector('.content').innerHTML = `
     <h1 class="page-title">⚙️ הגדרות קול</h1>
-    <div class="page-frame">
-      <label>קול לטקסט רגיל:</label><br>
-      <select id="voiceNormal" style="padding:0.4em; margin-bottom:1em;">${options(current.voiceNormal)}</select><br>
-      <label>קול לטקסט מודגש (דיבור המתחיל):</label><br>
-      <select id="voiceBold" style="padding:0.4em;">${options(current.voiceBold)}</select>
-      <div class="daf-actions">
-        <button class="primary" id="saveVoicesBtn">💾 שמור</button>
-        <button id="playSampleBtn">🔊 נגן דוגמה</button>
-      </div>
-      <div class="job-status" id="voiceStatus"></div>
-      <audio id="sampleAudio" controls style="display:none; margin-top:0.5em; width:100%;"></audio>
-    </div>`;
+    <p style="font-size:0.9rem; color:var(--ink-soft);">
+      "רגיל" = הקול שמקריא את רוב הטקסט. "מודגש" = הקול לדיבור-המתחיל (מילים מודגשות ב-'''...''').
+      המחירים לפי תמחור גוגל הפומבי (יכולים להשתנות).
+    </p>
+    ${rows}
+    <div class="daf-actions">
+      <button class="primary" id="saveVoicesBtn">💾 שמור בחירה</button>
+    </div>
+    <div class="job-status" id="voiceStatus"></div>
+    <audio id="sampleAudio" controls style="display:none; margin-top:0.5em; width:100%; position:sticky; bottom:1em;"></audio>
+  `;
+
+  const sampleAudio = document.getElementById('sampleAudio');
+  document.querySelectorAll('[data-sample]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const voiceName = btn.dataset.sample;
+      const original = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = 'טוען...';
+      try {
+        const r = await api('/voices/sample', { method: 'POST', body: JSON.stringify({ voiceName }) });
+        sampleAudio.src = `data:audio/mp3;base64,${r.audioBase64}`;
+        sampleAudio.style.display = 'block';
+        sampleAudio.play();
+      } catch (e) {
+        alert(e.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = original;
+      }
+    });
+  });
 
   document.getElementById('saveVoicesBtn').addEventListener('click', async () => {
-    const voiceNormal = document.getElementById('voiceNormal').value;
-    const voiceBold = document.getElementById('voiceBold').value;
-    await api('/voices', { method: 'POST', body: JSON.stringify({ voiceNormal, voiceBold }) });
+    const voiceNormal = document.querySelector('input[name="voiceNormalRadio"]:checked')?.value;
+    const voiceBold = document.querySelector('input[name="voiceBoldRadio"]:checked')?.value;
+    if (!voiceNormal) return alert('בחרו קול "רגיל" קודם');
+    await api('/voices', { method: 'POST', body: JSON.stringify({ voiceNormal, voiceBold: voiceBold || voiceNormal }) });
     document.getElementById('voiceStatus').textContent = 'נשמר ✓';
     document.getElementById('voiceStatus').className = 'job-status done';
   });
