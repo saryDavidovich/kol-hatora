@@ -246,20 +246,35 @@ router.post('/daf/:masechet/:daf/:amud/upload', async (req, res) => {
 
     // מתייגים גם את כל תיקיות הביניים (סדרים/מסכת/דף) בנפרד - בלי
     // לדרוס את ה-ext.ini שלהן (UpdateExtension מעדכן רק את ה-title,
-    // לא כל שאר ההגדרות - ראו pipeline/uploadToYemot.js)
+    // לא כל שאר ההגדרות). *** כל קריאה בנפרד עם try/catch משלה ***
+    // כדי שכשלון בתיוג אחד (למשל תקלת רשת חד-פעמית) לא יעצור את כל
+    // שאר התיוגים בשרשרת - זה בדיוק מה שקרה בבדיקה קודמת.
     progress(70, 'מתייג תיקיות ביניים...');
     const token = await login();
     const tree = await menuTree.getTree();
     const treeLevels = menuTree.getYemotPathLevelsWithNames(tree, masechet);
-    for (const level of treeLevels) {
-      await updateExtensionTitle(token, `/${level.pathPrefix.join('/')}`, level.name);
-    }
     const dafPadded = String(daf).padStart(3, '0');
-    const masechetPrefix = treeLevels[treeLevels.length - 1].pathPrefix;
-    await updateExtensionTitle(token, `/${[...masechetPrefix, dafPadded].join('/')}`, `דף ${daf}`);
+    const masechetPrefix = treeLevels.length ? treeLevels[treeLevels.length - 1].pathPrefix : [];
+    const allLevelsToTag = [
+      ...treeLevels.map((l) => ({ path: `/${l.pathPrefix.join('/')}`, title: l.name })),
+      { path: `/${[...masechetPrefix, dafPadded].join('/')}`, title: `דף ${daf}` },
+    ];
 
-    progress(100, 'הועלה בהצלחה');
-    return { remoteFolder };
+    const tagErrors = [];
+    for (const { path: levelPath, title } of allLevelsToTag) {
+      try {
+        await updateExtensionTitle(token, levelPath, title);
+        await new Promise((r) => setTimeout(r, 400)); // הגנה מעדינה מפני הגבלת קצב בימות
+      } catch (err) {
+        const detail = err.response ? JSON.stringify(err.response.data).slice(0, 200) : err.message;
+        tagErrors.push(`${levelPath} ("${title}"): ${detail}`);
+      }
+    }
+
+    progress(100, tagErrors.length
+      ? `הועלה, אך תיוג נכשל עבור: ${tagErrors.join(' | ')}`
+      : 'הועלה ותויג בהצלחה');
+    return { remoteFolder, tagErrors };
   });
 
   res.json({ jobId });
