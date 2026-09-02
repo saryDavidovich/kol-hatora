@@ -226,14 +226,27 @@ router.post('/daf/:masechet/:daf/:amud/upload', async (req, res) => {
     if (!(await fs.pathExists(localDir))) throw new Error('יש לבנות את התוכן קודם');
 
     const templatePath = path.join(__dirname, '..', 'config', 'ext-playfile-daf-template.ini');
-    const apiPlayerUrl = process.env.API_PLAYER_URL || 'https://YOUR-SERVER-DOMAIN.example.com/api/player/control';
-    const extIniContent = (await fs.readFile(templatePath, 'utf-8'))
+    if (!process.env.API_PLAYER_URL) {
+      throw new Error('משתנה הסביבה API_PLAYER_URL לא מוגדר ב-Railway - תפריט המפרשים ומעבר דפים לא יעבדו. הגדירו אותו קודם (ראו לוגי השרת להוראות).');
+    }
+    const apiPlayerUrl = process.env.API_PLAYER_URL;
+    const amudHeb = amud === 'a' ? 'א' : 'ב';
+    // הערה קריאה בראש הקובץ - כדי שיהיה אפשר לזהות את התיקייה מיד
+    // כשפותחים/מציצים ב-ext.ini בממשק הקבצים של ימות, בלי לפענח נתיב
+    // מספרי. לא משנה איך התיקייה מוצגת בעץ הקבצים עצמו (לא מצאנו
+    // לזה תמיכה מתועדת) - זו רשת ביטחון פרקטית.
+    const readableComment = `; ${masechet} - דף ${daf} עמוד ${amudHeb}\n`;
+    const extIniContent = readableComment + (await fs.readFile(templatePath, 'utf-8'))
       .replace(/https:\/\/YOUR-SERVER-DOMAIN\.example\.com\/api\/player\/control/g, apiPlayerUrl);
 
     progress(30, 'מתחבר לימות...');
     const remoteFolder = await menuTree.getMasechetYemotFolder(masechet, daf, amud);
     progress(50, `מעלה ל-${remoteFolder}...`);
     await uploadAmud({ localDir, remoteFolder, extIniContent });
+    // קובץ מידע נוסף - גלוי מיד ברשימת הקבצים (לא רק כשפותחים ext.ini)
+    const { uploadTextFile, login } = require('../pipeline/uploadToYemot');
+    const token = await login();
+    await uploadTextFile(token, `${masechet} - דף ${daf} עמוד ${amudHeb}`, `${remoteFolder}/_${masechet}_דף_${daf}${amudHeb}.txt`);
     progress(100, 'הועלה בהצלחה');
     return { remoteFolder };
   });

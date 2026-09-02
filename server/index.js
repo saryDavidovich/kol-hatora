@@ -112,6 +112,16 @@ app.use('/admin/api/menu-tree', adminAuth.requireAdminAuth, require('./menuTreeR
 app.use('/admin/api', adminAuth.requireAdminAuth, adminRoutes);
 
 const PORT = process.env.PORT || 3000;
+
+if (!process.env.API_PLAYER_URL) {
+  console.warn('⚠️⚠️⚠️  אזהרה: משתנה הסביבה API_PLAYER_URL לא מוגדר! ⚠️⚠️⚠️');
+  console.warn('   תפריט המפרשים (רש"י/תוספות) ומעבר דפים לא יעבדו בטלפון -');
+  console.warn('   ה-ext.ini שמועלה לימות יכיל כתובת placeholder מזויפת.');
+  console.warn('   הגדירו ב-Railway: API_PLAYER_URL=https://<הדומיין-שלכם>/api/player/control');
+} else {
+  console.log(`✓ API_PLAYER_URL מוגדר: ${process.env.API_PLAYER_URL}`);
+}
+
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`שרת ימות-הש"ס מאזין על 0.0.0.0:${PORT}`);
 });
