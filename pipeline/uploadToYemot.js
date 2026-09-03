@@ -69,10 +69,12 @@ async function uploadAmud({ localDir, remoteFolder, extIniContent }) {
  * שום דבר אחר בקובץ ה-ext.ini הקיים שם *** (מתועד רשמית: UpdateExtension
  * שונה מ-UploadTextFile בדיוק בגלל זה). משמש לתיוג תיקיות ביניים
  * (הסדרים/המסכתות/הדף/העמוד) בלי לגעת בהגדרות שלהן.
+ * @param type  סוג השלוחה - נדרש בפועל (לפי הדוגמה הרשמית) כדי
+ *              שהעדכון יחול בפועל, לא רק שיתקבל בלי שגיאה.
  */
-async function updateExtensionTitle(token, remotePath, title) {
+async function updateExtensionTitle(token, remotePath, title, type = 'menu') {
   await axios.get(`${YEMOT_BASE}/UpdateExtension`, {
-    params: { token, path: `ivr2:${remotePath}`, title },
+    params: { token, path: `ivr2:${remotePath}`, type, title },
     timeout: 15000,
   });
 }
