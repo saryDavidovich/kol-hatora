@@ -110,6 +110,7 @@ app.use('/admin', express.static(path.join(__dirname, 'public', 'admin')));
 app.post('/admin/api/login', express.json(), adminAuth.handleLogin);
 app.post('/admin/api/logout', adminAuth.handleLogout);
 app.use('/admin/api/menu-tree', adminAuth.requireAdminAuth, require('./menuTreeRoutes'));
+app.use('/admin/api/prompts', adminAuth.requireAdminAuth, require('./promptsRoutes'));
 app.use('/admin/api', adminAuth.requireAdminAuth, adminRoutes);
 
 /**

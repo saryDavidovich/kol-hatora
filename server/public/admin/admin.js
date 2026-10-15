@@ -18,6 +18,7 @@ function topbar() {
       <nav>
         <a href="#/">🌳 עץ תפריטים</a>
         <a href="#/voices">⚙️ הגדרות קול</a>
+        <a href="#/prompts">🎙️ הפקת הודעות</a>
         <a href="#" id="logoutLink">התנתקות</a>
       </nav>
     </div>`;
@@ -492,6 +493,131 @@ async function renderVoiceSettings() {
   });
 }
 
+// ==================== הפקת הודעות לקו ימות ====================
+// רשימת ברירת המחדל: הודעות תמלול פון (004, 094, 150-182) בנוסח ובניקוד שנמסרו.
+// הטקסט נשלח לקריין בדיוק כפי שהוא - בלי שום שינוי בניקוד.
+const DEFAULT_PROMPTS = "004 | לְהַתְחָלַת הַקְלָטָה וְתִּמְלוּל הַקִּישׁוּ 1, לִטְעִינַת אַרְנָק וְעִדְכּוּן פְּרָטִים הַקִּישׁוּ 2, לְהֶסְבֵּר עַל אֹפֶן הַשִּׁמּוּשׁ בַּמַּעֲרֶכֶת הַקִּישׁוּ 3, לְהַקְלָטַת בְּרִירַת הַמַּחְדָּל שֶׁלָּכֶם הַקִּישׁוּ 4, לְהֶסְבֵּר עַל שְׁלִיחַת קְבָצִים דֶּרֶךְ הַמֵּיְיל הַקִּישׁוּ 5, לְהֶסְבֵּר עַל שְׁלִיחַת קִבְצֵי כְּתַב יָד דֶּרֶךְ הַמֵּיְיל הַקִּישׁוּ 6, לִכְנִיסָה עִם מִסְפַּר תַּלְמִיד הַקִּישׁוּ 7, לְהִיסְטוֹרְיַת הַמִּסְמָכִים הַקִּישׁוּ 8, לְהַשְׁאָרַת הוֹדָעָה הַקִּישׁוּ 9.\n094 | לִשְׁמִיעַת הוֹדָעוֹת הַקֵּשׁ 1 לְמַעֲבָר לִשְׁלוּחָה 59 הַקֵּשׁ 2 לְהַקְלָטָה עִם עֲרִיכָה הַקֵּשׁ 3.\n150 | לִשְׁמִירַת הַהַקְלָטָה וּשְׁלִיחָה לְתִּמְלוּל הַקִּישׁוּ 1, לְהַקְלָטָה מִחָדָשׁ הַקִּישׁוּ 2, לְהֶמְשֵׁךְ הַהַקְלָטָה הַקִּישׁוּ 3.\n151 | הַקְלִיטוּ מִחָדָשׁ לְאַחַר הַצְּלִיל, בְּסִיּוּם הַקִּישׁוּ סוּלָּמִית.\n152 | הַמְשִׁיכוּ לְהַקְלִיט לְאַחַר הַצְּלִיל, בְּסִיּוּם הַקִּישׁוּ סוּלָּמִית.\n153 | לֹא נִמְצְאוּ מִסְמָכִים קוֹדְמִים.\n154 | מִסְמָךְ.\n155 | מִתּוֹךְ.\n156 | תִּמְלוּל הַקְלָטָה.\n157 | זִיהוּי כְּתַב יָד\n158 | קַלְדָנוּת דִּיגִיטָלִית\n159 | מִתַּאֲרִיךְ\n160 | בְּאוֹרֶךְ\n161 | דַּקּוֹת\n162 | לְקַבָּלַת הַמִּסְמָךְ שׁוּב הַקִּישׁוּ 1, לַמִּסְמָךְ הַבָּא הַקִּישׁוּ 2, לַמִּסְמָךְ הַקּוֹדֵם הַקִּישׁוּ 3, לַחֲזָרָה לַתַּפְרִיט הָרָאשִׁי הַקִּישׁוּ 0.\n163 | הַמִּסְמָךְ נִשְׁלַח שׁוּב לַמֵּיְיל שֶׁלָּכֶם.\n164 | הַמִּסְמָךְ נִשְׁלַח שׁוּב לַפַקְס שֶׁלָּכֶם.\n165 | שְׁלִיחָה חוֹזֶרֶת לַפַקְס עוֹלָה\n166 | לְאִשּׁוּר הַקִּישׁוּ 1, לְבִטּוּל וַחֲזָרָה הַקִּישׁוּ 2.\n167 | אֲגוֹרוֹת.\n168 | שֶׁקֶל.\n169 | הַשְּׁלִיחָה בּוּטְלָה.\n170 | אֵין מַסְפִּיק יִתְּרָה לִשְׁלִיחָה בַּפַקְס.\n171 | לֹא מוּגְדָר מֵיְיל אוֹ פַקְס לִשְׁלִיחָה, נִיתָן לְעַדְכֵּן פְּרָטִים בִּשְׁלוּחָה 2 מִתַּפְרִיט רָאשִׁי.\n172 | הִגַּעְתֶּם לִמְסַפַּר הַשְּׁלִיחוֹת הַחוֹזְרוֹת הַמִּרְבִּי לְהַיּוֹם.\n173 | הַשְּׁלִיחָה נִכְשְׁלָה, נַסּוּ שׁוּב מְאֻחָר יוֹתֵר.\n174 | מִסְמָךְ אַחֲרוֹן.\n175 | מִסְמָךְ רִאשׁוֹן.\n176 | בְּאֹרֶךְ דַּקָּה אַחַת.\n177 | [צליל]\n178 | הַקְלָטָה עִם עֲרִיכָה. דַּבְּרוּ לְאַחַר הַצְּלִיל. לְעִצּוּב, הַקִּישׁוּ כּוֹכָבִית וּמִיָּד אֶת מִסְפַּר הַפְּעֻלָּה. לְתַפְרִיט הָעֲרִיכָה הַקִּישׁוּ פַּעֲמַיִם כּוֹכָבִית. לְסִיּוּם, הַקִּישׁוּ סוּלָּמִית.\n179 | תַּפְרִיט עֲרִיכָה. לִירִידַת שׁוּרָה הַקִּישׁוּ 1. לְהַדְגָּשָׁה הַקִּישׁוּ 2, וְשׁוּב 2 לְסִיּוּם הַהַדְגָּשָׁה. לְקַו תַּחְתּוֹן הַקִּישׁוּ 3, וְשׁוּב 3 לְסִיּוּם. לְסוֹגֵר מְרֻבָּע הַקִּישׁוּ 4 לִפְתִיחָה, וְשׁוּב 4 לִסְגִירָה. לְסוֹגֵר עָגוֹל הַקִּישׁוּ 5 לִפְתִיחָה, וְשׁוּב 5 לִסְגִירָה. לַמַּקָּף הַקִּישׁוּ 6. לְנְקוּדוֹתַּיִים הַקִּישׁוּ 7. לְסִימַן שְׁאֵלָה הַקִּישׁוּ 8. לִמֶרְכָאוֹת הַקִּישׁוּ 9. לַחֲזָרָה לַהַקְלָטָה הַקִּישׁוּ 0.\n180 | בְּשָׁעָה\n181 | לִשְׁמִיעַת הַהַקְלָטָה הַקִּישׁוּ 4, לְקַבָּלַת הַמִּסְמָךְ שׁוּב הַקִּישׁוּ 1, לַמִּסְמָךְ הַבָּא הַקִּישׁוּ 2, לַמִּסְמָךְ הַקּוֹדֵם הַקִּישׁוּ 3, לַחֲזָרָה לַתַּפְרִיט הָרָאשִׁי הַקִּישׁוּ 0.\n182 | לִשְׁלִיחָה לְתִּמְלוּל הַמְתִּינוּ. לְהֶמְשֵׁךְ הַקְלָטָה הַקִּישׁוּ 0, לְתַפְרִיט הָעֲרִיכָה הַקִּישׁוּ כּוֹכָבִית.";
+let promptsDraft = null;   // נשמר בין מעברי מסך באותו ביקור
+
+function parsePrompts(text) {
+  const items = [], errors = [];
+  text.split('\n').forEach((line, i) => {
+    if (!line.trim()) return;
+    const bar = line.indexOf('|');
+    if (bar < 0) { errors.push(`שורה ${i + 1}: חסר "|" בין המספר לטקסט`); return; }
+    items.push({ num: line.slice(0, bar).trim(), text: line.slice(bar + 1).trim() });
+  });
+  return { items, errors };
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+}
+
+async function renderPromptsTool() {
+  app.innerHTML = `${topbar()}<div class="content"><div class="loading">טוען קולות...</div></div>`;
+  attachTopbarHandlers();
+  let voices = [], current = {};
+  try {
+    ({ voices, current } = await api('/voices'));
+  } catch (e) {
+    document.querySelector('.content').innerHTML = `<p class="column-error">שגיאה בטעינת הקולות: ${escapeHtml(e.message)}</p>`;
+    return;
+  }
+  const options = voices.map((v) => `<option value="${v.name}">${v.name} · ${v.ssmlGender === 'MALE' ? 'זכר' : 'נקבה'}</option>`).join('');
+
+  document.querySelector('.content').innerHTML = `
+    <h1 class="page-title">הפקת הודעות לקו ימות</h1>
+    <p>כל שורה: <b>מספר ההודעה | הטקסט</b>. כל הודעה תיווצר כקובץ <b>NNN/000.wav</b>
+       (8000Hz, כמו שימות מקבלת) - מעלים את התיקיות לתוך "הודעות מערכת" בקו.
+       הטקסט נשלח לקריין בדיוק כפי שהוא, כולל הניקוד. שורה עם <b>[צליל]</b> תהיה צפצוף קצר.</p>
+    <div class="page-frame">
+      <div style="display:flex;flex-wrap:wrap;gap:1rem;align-items:end;margin-bottom:0.8rem">
+        <label>קול<br><select id="promptVoice" style="padding:0.4em">${options}</select></label>
+        <label>מהירות דיבור <span id="rateVal">1.00</span><br>
+          <input id="promptRate" type="range" min="0.5" max="1.5" step="0.05" value="1"></label>
+      </div>
+      <textarea id="promptList" dir="rtl" style="width:100%;min-height:22rem;font-size:1rem;line-height:1.7;padding:0.6em"></textarea>
+      <div class="column-toolbar" style="display:flex;flex-wrap:wrap;gap:0.5rem;margin-top:0.6rem">
+        <button id="promptReset">החזרת הרשימה המקורית</button>
+        <button class="primary" id="promptZip">⬇ הפקת כל ההודעות (ZIP)</button>
+      </div>
+      <div class="job-status" id="promptStatus"></div>
+    </div>
+    <h2 class="page-title" style="font-size:1.2rem;margin-top:1.5rem">שמיעה לפני הפקה</h2>
+    <div id="promptRows"></div>
+    <audio id="promptAudio" controls style="display:none;width:100%;margin-top:0.5rem"></audio>`;
+
+  const voiceSel = document.getElementById('promptVoice');
+  const rate = document.getElementById('promptRate');
+  const list = document.getElementById('promptList');
+  const status = document.getElementById('promptStatus');
+  const audio = document.getElementById('promptAudio');
+  if (current.voiceNormal) voiceSel.value = current.voiceNormal;
+  list.value = promptsDraft || DEFAULT_PROMPTS;
+  rate.addEventListener('input', () => { document.getElementById('rateVal').textContent = Number(rate.value).toFixed(2); });
+
+  const setStatus = (msg, cls) => { status.textContent = msg; status.className = `job-status ${cls || ''}`; };
+
+  function drawRows() {
+    promptsDraft = list.value;
+    const { items, errors } = parsePrompts(list.value);
+    document.getElementById('promptRows').innerHTML =
+      (errors.length ? `<p class="column-error">${errors.map(escapeHtml).join('<br>')}</p>` : '') +
+      items.map((it, i) => `
+        <div style="display:flex;gap:0.6rem;align-items:flex-start;padding:0.4rem 0;border-bottom:1px solid var(--rule)">
+          <button data-i="${i}" class="promptPlay" title="שמיעה">▶</button>
+          <b style="min-width:2.5em;font-variant-numeric:tabular-nums">${escapeHtml(it.num)}</b>
+          <span style="flex:1;min-width:0">${escapeHtml(it.text)}</span>
+        </div>`).join('');
+    document.querySelectorAll('.promptPlay').forEach((b) => b.addEventListener('click', async () => {
+      const it = parsePrompts(list.value).items[Number(b.dataset.i)];
+      b.disabled = true;
+      try {
+        const r = await api('/prompts/preview', { method: 'POST', body: JSON.stringify({ text: it.text, voice: voiceSel.value, rate: rate.value }) });
+        audio.src = `data:audio/wav;base64,${r.audioBase64}`;
+        audio.style.display = 'block';
+        audio.play();
+      } catch (e) {
+        setStatus(`שמיעת ${it.num} נכשלה: ${e.message}`, 'error');
+      } finally { b.disabled = false; }
+    }));
+  }
+  list.addEventListener('input', drawRows);
+  drawRows();
+
+  document.getElementById('promptReset').addEventListener('click', () => {
+    list.value = DEFAULT_PROMPTS; drawRows(); setStatus('הרשימה המקורית הוחזרה');
+  });
+
+  document.getElementById('promptZip').addEventListener('click', async () => {
+    const { items, errors } = parsePrompts(list.value);
+    if (errors.length) { setStatus(errors[0], 'error'); return; }
+    const btn = document.getElementById('promptZip');
+    btn.disabled = true;
+    setStatus(`מפיק ${items.length} הודעות... זה לוקח כחצי דקה`);
+    try {
+      const resp = await fetch('/admin/api/prompts/zip', {
+        method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items, voice: voiceSel.value, rate: rate.value }),
+      });
+      if (!resp.ok) {
+        const data = await resp.json().catch(() => ({}));
+        throw new Error(data.error || `שגיאה (${resp.status})`);
+      }
+      const blob = await resp.blob();
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'הודעות_מערכת.zip';
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+      setStatus(`הורד קובץ עם ${items.length} הודעות ✓`, 'done');
+    } catch (e) {
+      setStatus(`ההפקה נכשלה: ${e.message}`, 'error');
+    } finally { btn.disabled = false; }
+  });
+}
+
 // ==================== ניתוב ====================
 function render() {
   const hash = location.hash || '#/';
@@ -507,6 +633,7 @@ function render() {
     const dafMatch = hash.match(/^#\/daf\/([^/]+)\/(\d+)\/([ab])$/);
     if (dafMatch) return renderDafEditor(decodeURIComponent(dafMatch[1]), parseInt(dafMatch[2], 10), dafMatch[3]);
     if (hash === '#/voices') return renderVoiceSettings();
+    if (hash === '#/prompts') return renderPromptsTool();
 
     return renderTreeEditor('root');
   });
